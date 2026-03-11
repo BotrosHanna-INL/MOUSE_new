@@ -13,6 +13,8 @@ from cost.non_direct_cost import (validate_tax_credit_params, calculate_accounts
                                    calculate_high_level_capital_costs_central_facility, calculate_TCI_central)
 from cost.params_registry import PARAMS_REGISTRY, GROUP_ORDER
 from reactor_engineering_evaluation.operation import reactor_operation
+from cost.cost_drivers import cost_drivers_estimate
+
 
 
 def calculate_high_level_accounts_cost(df, target_level, option, FOAK_or_NOAK):
@@ -222,20 +224,14 @@ def save_params_to_excel_file(excel_file, params):
     print(f"\n\nParameters saved — {total_params} entries across {active_groups} groups.\n\n")
 
 
+
 def transform_dataframe(df):
-    """
-    Divides all values in the specified column by one million, except the last two rows,
-    rounds to one non-zero digit after the decimal point, and appends 'M'. Converts the last two rows to integers.
-
-    Parameters:
-    df (pd.DataFrame): The dataframe containing the data.
-
-    Returns:
-    pd.DataFrame: The modified dataframe.
-    """
     numerical_columns = df.select_dtypes(include=[np.number]).columns
     df = df.loc[~(df[numerical_columns] == 0).all(axis=1)]
-    df[numerical_columns] = df[numerical_columns].astype(int)
+    for col in numerical_columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        df[col] = df[col].fillna('-')
+        df[col] = df[col].apply(lambda x: int(x) if x != '-' else x)
     return df
 
 
@@ -432,7 +428,7 @@ def detailed_bottom_up_cost_estimate(cost_database_filename, params, output_file
 
     with pd.ExcelWriter(output_filename) as writer:
         pretty_df.to_excel(writer, sheet_name="cost estimate", index=False)
-        
+
         if detailed_central_cost_table is not None:
             numerical_columns = detailed_central_cost_table.select_dtypes(include=[np.number]).columns
             nan_mask = detailed_central_cost_table[numerical_columns].isna().any(axis=1)
@@ -441,9 +437,18 @@ def detailed_bottom_up_cost_estimate(cost_database_filename, params, output_file
                 print(detailed_central_cost_table[nan_mask][['Account', 'Account Title'] + list(numerical_columns)])
             pretty_central_df = transform_dataframe(detailed_central_cost_table)
             pretty_central_df.to_excel(writer, sheet_name="central facility cost estimate", index=False)
-      
-        
+
         save_params_to_excel_file(writer, params)
+
+    # Always compute per-account LCOE contributions so they appear in Excel.
+    # The PNG plot is only generated if params['plotting'] == "Y" —
+    # that gate lives inside cost_drivers_estimate.
+    lcoe_enriched_table = cost_drivers_estimate(detailed_cost_table, params)
+
+    if lcoe_enriched_table is not None:
+        pretty_lcoe_df = transform_dataframe(lcoe_enriched_table)
+        with pd.ExcelWriter(output_filename, mode='a', if_sheet_exists='replace') as writer:
+            pretty_lcoe_df.to_excel(writer, sheet_name="cost estimate", index=False)
 
     print(f"\n\nThe cost estimate and all the parameters are saved at {output_filename}\n\n")
     return detailed_cost_table
