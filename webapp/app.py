@@ -592,11 +592,20 @@ with st.sidebar:
     st.divider()
     st.markdown('**B — Operation Parameters**')
 
-    operation_mode = st.selectbox(
+    _OPERATION_MODE_LABELS = {
+        'Remotely Monitored': 'Autonomous',
+        'On-Site Staffed':    'Non-Autonomous',
+    }
+    operation_mode_label = st.selectbox(
         'Operation Mode',
-        options=['Autonomous', 'Non-Autonomous'],
-        help='Autonomous = minimal on-site operators; Non-Autonomous = full staffing.',
+        options=list(_OPERATION_MODE_LABELS.keys()),
+        help=(
+            '**Remotely Monitored:** Operators monitor the reactor remotely and are '
+            'required on-site only for emergencies or shutdown.\n\n'
+            '**On-Site Staffed:** Operators must be physically present in the control room 24/7.'
+        ),
     )
+    operation_mode = _OPERATION_MODE_LABELS[operation_mode_label]
     emergency_shutdowns = st.number_input(
         'Emergency Shutdowns per Year',
         min_value=0.0, max_value=10.0, value=0.2, step=0.1, format='%.1f',
