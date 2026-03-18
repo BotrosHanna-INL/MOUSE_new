@@ -448,6 +448,10 @@ section[data-testid="stSidebar"] hr {
     border-color: rgba(255,255,255,0.08) !important;
     margin: 0.6rem 0 !important;
 }
+section[data-testid="stSidebar"] .stTooltipIcon {
+    color: #93c5fd !important;
+    opacity: 1 !important;
+}
 section[data-testid="stSidebar"] .stButton > button {
     background: linear-gradient(135deg, #e05c2b 0%, #b84520 100%) !important;
     color: white !important;
