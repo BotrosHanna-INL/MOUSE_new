@@ -577,15 +577,17 @@ with st.sidebar:
     st.caption(f'{enrichment * 100:.2f}% enriched')
 
     _power_defaults = {'LTMR': 20, 'GCMR': 15, 'HPMR': 7}
+    _power_max = {'LTMR': 20, 'GCMR': 20, 'HPMR': 7}
+
     power_mwt = st.slider(
         'Thermal Power (MWt)',
         min_value=1,
-        max_value=20,
+        max_value=_power_max[reactor_type],
         value=_power_defaults[reactor_type],
         step=1,
         key=f'power_{reactor_type}',
         help='Thermal power output. Affects power-dependent params and fuel lifetime via interpolation.',
-    )
+    )   
 
     st.divider()
     st.markdown('**B — Operation Parameters**')
