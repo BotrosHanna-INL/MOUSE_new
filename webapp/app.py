@@ -133,6 +133,11 @@ _pd_orig.read_excel = _patched_read_excel
 _ce.pd.read_excel = _patched_read_excel
 
 # ---------------------------------------------------------------------------
+# Escalation year — change this single value to update all cost year references.
+# ---------------------------------------------------------------------------
+ESCALATION_YEAR = 2025
+
+# ---------------------------------------------------------------------------
 # Reactor metadata: full names and design images
 # ---------------------------------------------------------------------------
 _REACTOR_LABELS = {
@@ -236,7 +241,7 @@ def _run_estimate(reactor_type, power_mwt, enrichment, interest_rate,
         'Interest Rate': interest_rate,
         'Construction Duration': construction_duration,
         'Debt To Equity Ratio': debt_to_equity,
-        'Escalation Year': 2024,
+        'Escalation Year': ESCALATION_YEAR,
         'Operation Mode': operation_mode,
         'Emergency Shutdowns Per Year': emergency_shutdowns,
         'Startup Duration after Emergency Shutdown': startup_duration,
@@ -688,7 +693,7 @@ with st.sidebar:
 if not run_button:
     # ── Hero banner ──────────────────────────────────────────────────────────
     st.markdown(
-        '''<div style="background:linear-gradient(135deg,#0b1f3a 0%,#1B4F8C 55%,#1e6fa8 100%);
+        f'''<div style="background:linear-gradient(135deg,#0b1f3a 0%,#1B4F8C 55%,#1e6fa8 100%);
                        border-radius:18px;padding:3rem 3rem 2.8rem;color:white;
                        margin-bottom:1.5rem;position:relative;overflow:hidden;">
              <div style="position:absolute;top:-60px;right:-60px;width:300px;height:300px;
@@ -716,7 +721,7 @@ if not run_button:
                for both <strong style="color:white;">First-of-a-Kind (FOAK)</strong> and
                <strong style="color:white;">Nth-of-a-Kind (NOAK)</strong> deployments.
                Cost estimation correlations derive from the MARVEL project and supplementary literature.
-               All costs in <strong style="color:white;">2024 USD</strong>.
+               All costs in <strong style="color:white;">{ESCALATION_YEAR} USD</strong>.
              </p>
              <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
                <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);
@@ -870,7 +875,7 @@ st.markdown(
            </div>
            <div>
              <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;opacity:0.55;">All costs in</div>
-             <div style="font-weight:700;font-size:0.95rem;">2024 USD</div>
+             <div style="font-weight:700;font-size:0.95rem;">{ESCALATION_YEAR} USD</div>
            </div>
          </div>
        </div>''',
@@ -1073,9 +1078,9 @@ with tab_drivers:
 # ═══════════════════════════════════════════════════════════════
 with tab_table:
     st.markdown(
-        '<p style="color:#64748b;font-size:0.85rem;margin-bottom:1rem;">'
-        'Full cost breakdown by Code of Accounts. Highlighted rows are parent accounts. '
-        'All dollar values in 2024 USD.</p>',
+        f'<p style="color:#64748b;font-size:0.85rem;margin-bottom:1rem;">'
+        f'Full cost breakdown by Code of Accounts. Highlighted rows are parent accounts. '
+        f'All dollar values in {ESCALATION_YEAR} USD.</p>',
         unsafe_allow_html=True,
     )
 
