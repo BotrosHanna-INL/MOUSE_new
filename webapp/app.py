@@ -1086,15 +1086,36 @@ with tab_table:
                       if c.startswith('NOAK Estimated Cost (') and 'std' not in c), None)
     _foak_std = next((c for c in display_df.columns if 'FOAK Estimated Cost std' in c), None)
     _noak_std = next((c for c in display_df.columns if 'NOAK Estimated Cost std' in c), None)
-    _have_lcoe = 'FOAK LCOE' in display_df.columns
+    _have_lcoe = 'FOAK LCOE' in enriched_df.columns
 
-    # ── "mean ± std" formatter ────────────────────────────────────────────────
+    # ── "mean ± std" formatter for costs ──────────────────────────────────────
     def _pm(mean_val, std_val):
         m = _fmt_table_val(mean_val)
         if m == '-':
             return '-'
         s = _fmt_table_val(std_val)
         return f'{m} ± {s}' if s not in ('-', '0') else m
+
+    # ── LCOE formatter — uses pre-transform floats for sub-$/MWh precision ───
+    def _fmt_lcoe(v):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return '-'
+        if np.isnan(v) or v <= 0:
+            return '-'
+        if v < 1:
+            return '< 1'
+        if v < 10:
+            return f'{v:.1f}'
+        return str(int(round(v)))
+
+    def _pm_lcoe(mean_val, std_val):
+        m = _fmt_lcoe(mean_val)
+        if m == '-':
+            return '-'
+        s = _fmt_lcoe(std_val)
+        return f'{m} ± {s}' if s != '-' else m
 
     # ── build display table ───────────────────────────────────────────────────
     def _fmt_account(x):
@@ -1115,28 +1136,34 @@ with tab_table:
     table_df['NOAK Cost']  = [_pm(m, s) for m, s in zip(display_df[_noak_col], _sn)]
 
     if _have_lcoe:
-        _lsf = display_df['FOAK LCOE_std'] if 'FOAK LCOE_std' in display_df.columns \
-               else pd.Series('-', index=display_df.index)
-        _lsn = display_df['NOAK LCOE_std'] if 'NOAK LCOE_std' in display_df.columns \
-               else pd.Series('-', index=display_df.index)
-        table_df['FOAK LCOE ($/MWh)'] = [_pm(m, s) for m, s in zip(display_df['FOAK LCOE'], _lsf)]
-        table_df['NOAK LCOE ($/MWh)'] = [_pm(m, s) for m, s in zip(display_df['NOAK LCOE'], _lsn)]
+        # Use enriched_df (pre-transform) for float LCOE values; reindex to match display_df rows
+        _ei = display_df.index
+        _e_fl = enriched_df['FOAK LCOE'].reindex(_ei)
+        _e_nl = enriched_df['NOAK LCOE'].reindex(_ei)
+        _e_fls = enriched_df['FOAK LCOE_std'].reindex(_ei) \
+                 if 'FOAK LCOE_std' in enriched_df.columns else pd.Series(np.nan, index=_ei)
+        _e_nls = enriched_df['NOAK LCOE_std'].reindex(_ei) \
+                 if 'NOAK LCOE_std' in enriched_df.columns else pd.Series(np.nan, index=_ei)
+        table_df['FOAK LCOE ($/MWh)'] = [_pm_lcoe(m, s) for m, s in zip(_e_fl, _e_fls)]
+        table_df['NOAK LCOE ($/MWh)'] = [_pm_lcoe(m, s) for m, s in zip(_e_nl, _e_nls)]
 
     # ── numeric FOAK values used for cost color scale ─────────────────────────
     _foak_num = pd.to_numeric(display_df[_foak_col], errors='coerce') if _foak_col else None
 
-    # ── level series for row styling ──────────────────────────────────────────
-    _levels = display_df['Level'] if 'Level' in display_df.columns \
-              else pd.Series('-', index=display_df.index)
+    # ── level dict for row styling — explicit dict avoids Series.get edge cases ─
+    _level_dict = {}
+    if 'Level' in display_df.columns:
+        for _idx, _val in zip(display_df.index.tolist(), display_df['Level'].tolist()):
+            _level_dict[_idx] = _val
 
     # ── row-level background + font-weight ────────────────────────────────────
-    _LEVEL_BG = {0: '#bfdbfe', 1: '#dbeafe', 2: '#eff6ff'}
+    _LEVEL_BG = {0: '#bfdbfe', 1: '#dbeafe', 2: '#eff6ff', 3: '#f8fafc', 4: '#f8fafc'}
     _SUMMARY_BG = '#fef3c7'   # amber — OCC / TCI / LCOE summary rows
 
     def _row_style(row):
-        lv = _levels.get(row.name, '-')
+        raw = _level_dict.get(row.name, '-')
         try:
-            lv = int(lv)
+            lv = int(raw)
         except (ValueError, TypeError):
             lv = '-'
 
@@ -1149,7 +1176,7 @@ with tab_table:
         elif lv == 2:
             bg, fw = _LEVEL_BG[2], 'font-weight:500'
         else:
-            bg, fw = '', ''
+            bg, fw = _LEVEL_BG.get(lv, '#f8fafc'), ''
 
         styles = []
         for col in row.index:
