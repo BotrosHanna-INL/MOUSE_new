@@ -1088,13 +1088,21 @@ with tab_table:
     _noak_std = next((c for c in display_df.columns if 'NOAK Estimated Cost std' in c), None)
     _have_lcoe = 'FOAK LCOE' in enriched_df.columns
 
-    # ── "mean ± std" formatter for costs ──────────────────────────────────────
+    # ── range formatter for costs: [mean-std – mean+std] ─────────────────────
     def _pm(mean_val, std_val):
         m = _fmt_table_val(mean_val)
         if m == '-':
             return '-'
-        s = _fmt_table_val(std_val)
-        return f'{m} ± {s}' if s not in ('-', '0') else m
+        try:
+            mn = float(mean_val)
+            sd = float(std_val)
+        except (TypeError, ValueError):
+            return m
+        if sd == 0 or np.isnan(sd):
+            return m
+        lo = _fmt_table_val(max(0, mn - sd))
+        hi = _fmt_table_val(mn + sd)
+        return f'{lo} – {hi}' if lo != hi else lo
 
     # ── LCOE formatter — uses pre-transform floats for sub-$/MWh precision ───
     def _fmt_lcoe(v):
@@ -1114,8 +1122,18 @@ with tab_table:
         m = _fmt_lcoe(mean_val)
         if m == '-':
             return '-'
-        s = _fmt_lcoe(std_val)
-        return f'{m} ± {s}' if s != '-' else m
+        try:
+            mn = float(mean_val)
+            sd = float(std_val)
+        except (TypeError, ValueError):
+            return m
+        if np.isnan(sd) or sd <= 0:
+            return m
+        lo = _fmt_lcoe(max(0.0, mn - sd))
+        hi = _fmt_lcoe(mn + sd)
+        if lo == hi:
+            return lo
+        return f'{lo} – {hi}'
 
     # ── build display table ───────────────────────────────────────────────────
     def _fmt_account(x):
@@ -1147,9 +1165,6 @@ with tab_table:
         table_df['FOAK LCOE ($/MWh)'] = [_pm_lcoe(m, s) for m, s in zip(_e_fl, _e_fls)]
         table_df['NOAK LCOE ($/MWh)'] = [_pm_lcoe(m, s) for m, s in zip(_e_nl, _e_nls)]
 
-    # ── numeric FOAK values used for cost color scale ─────────────────────────
-    _foak_num = pd.to_numeric(display_df[_foak_col], errors='coerce') if _foak_col else None
-
     # ── derive hierarchy level from account number ────────────────────────────
     # Level column is dropped by bottom_up_cost_estimate, so we infer it:
     #   Level 0 → 2-digit multiple of 10  (10, 20, 60, 80)
@@ -1173,61 +1188,35 @@ with tab_table:
     _acct_levels = [_account_level(a) for a in table_df['Account']]
     _idx_to_pos  = {idx: pos for pos, idx in enumerate(table_df.index)}
 
-    # ── row-level background + font-weight ────────────────────────────────────
-    _LEVEL_BG = {0: '#bfdbfe', 1: '#dbeafe', 2: '#eff6ff', 3: '#f8fafc', 4: '#f8fafc'}
-    _SUMMARY_BG = '#fef3c7'   # amber — OCC / TCI / LCOE summary rows
+    # ── row-level colors (full row) ───────────────────────────────────────────
+    # Sky-blue gradient: deeper level = lighter; summary rows = warm amber
+    _LEVEL_STYLE = {
+        '-': ('background-color:#fef9c3', 'font-weight:700'),   # amber  — summary
+         0:  ('background-color:#7dd3fc', 'font-weight:700'),   # sky-400 — top parent
+         1:  ('background-color:#bae6fd', 'font-weight:600'),   # sky-200
+         2:  ('background-color:#e0f2fe', 'font-weight:500'),   # sky-100
+         3:  ('background-color:#f0f9ff', 'font-weight:400'),   # sky-50
+         4:  ('background-color:#fafafa', 'font-weight:400'),   # near-white
+    }
 
     def _row_style(row):
-        lv = _acct_levels[_idx_to_pos[row.name]]
-
-        if lv == '-':
-            bg, fw = _SUMMARY_BG, 'font-weight:700'
-        elif lv == 0:
-            bg, fw = _LEVEL_BG[0], 'font-weight:700'
-        elif lv == 1:
-            bg, fw = _LEVEL_BG[1], 'font-weight:600'
-        elif lv == 2:
-            bg, fw = _LEVEL_BG[2], 'font-weight:500'
-        else:
-            bg, fw = _LEVEL_BG.get(lv, '#f8fafc'), ''
-
-        styles = []
-        for col in row.index:
-            if col in ('Account', 'Account Title'):
-                styles.append(f'background-color:{bg};{fw}' if bg else fw)
-            else:
-                styles.append(fw)
-        return styles
-
-    # ── white → light-salmon color scale on FOAK cost magnitude ──────────────
-    def _cost_color_scale(col):
-        if _foak_num is None:
-            return pd.Series('', index=col.index)
-        vals = _foak_num.reindex(col.index)
-        valid = vals[(vals > 0) & vals.notna()]
-        if valid.empty or valid.max() == valid.min():
-            return pd.Series('', index=col.index)
-        vmin, vmax = valid.min(), valid.max()
-        styles = []
-        for idx in col.index:
-            v = vals.get(idx, np.nan)
-            if pd.isna(v) or v <= 0:
-                styles.append('')
-            else:
-                t = (v - vmin) / (vmax - vmin)
-                g = int(255 - t * 80)
-                b = int(255 - t * 100)
-                styles.append(f'background-color:rgb(255,{g},{b})')
-        return pd.Series(styles, index=col.index)
+        lv  = _acct_levels[_idx_to_pos[row.name]]
+        bg, fw = _LEVEL_STYLE.get(lv, ('background-color:#fafafa', ''))
+        cell = f'{bg};{fw}'
+        return [cell] * len(row)
 
     # ── assemble styler ───────────────────────────────────────────────────────
     _num_cols = [c for c in table_df.columns if c not in ('Account', 'Account Title')]
     styled = (
         table_df.style
         .apply(_row_style, axis=1)
-        .apply(_cost_color_scale, subset=['FOAK Cost'])
-        .apply(_cost_color_scale, subset=['NOAK Cost'])
         .set_properties(subset=_num_cols, **{'text-align': 'right', 'padding': '2px 8px'})
+        .set_table_styles([{
+            'selector': 'thead tr th',
+            'props': ('background-color:#0c4a6e;color:#f0f9ff;'
+                      'font-weight:600;font-size:0.75rem;'
+                      'text-transform:uppercase;letter-spacing:0.05em;')
+        }])
     )
 
     _col_cfg = {
@@ -1240,7 +1229,8 @@ with tab_table:
         _col_cfg['FOAK LCOE ($/MWh)'] = st.column_config.TextColumn(width='small')
         _col_cfg['NOAK LCOE ($/MWh)'] = st.column_config.TextColumn(width='small')
 
-    st.dataframe(styled, use_container_width=True, height=580, column_config=_col_cfg)
+    st.dataframe(styled, use_container_width=True, height=580,
+                 hide_index=True, column_config=_col_cfg)
 
     st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
 
