@@ -1079,13 +1079,24 @@ with tab_table:
         unsafe_allow_html=True,
     )
 
-    # Only show cost columns in the table (drop per-account LCOE contribution cols)
-    _display_cols = [c for c in display_df.columns
-                     if c in ('Account', 'Account Title') or 'Estimated Cost' in str(c)]
-    table_df = display_df[_display_cols].copy()
+    # ── resolve column names ──────────────────────────────────────────────────
+    _foak_col = next((c for c in display_df.columns
+                      if c.startswith('FOAK Estimated Cost (') and 'std' not in c), None)
+    _noak_col = next((c for c in display_df.columns
+                      if c.startswith('NOAK Estimated Cost (') and 'std' not in c), None)
+    _foak_std = next((c for c in display_df.columns if 'FOAK Estimated Cost std' in c), None)
+    _noak_std = next((c for c in display_df.columns if 'NOAK Estimated Cost std' in c), None)
+    _have_lcoe = 'FOAK LCOE' in display_df.columns
 
-    # Format Account values: integers drop decimal (10.0 → '10'),
-    # floats trim trailing zeros (213.11 → '213.11'), strings pass through.
+    # ── "mean ± std" formatter ────────────────────────────────────────────────
+    def _pm(mean_val, std_val):
+        m = _fmt_table_val(mean_val)
+        if m == '-':
+            return '-'
+        s = _fmt_table_val(std_val)
+        return f'{m} ± {s}' if s not in ('-', '0') else m
+
+    # ── build display table ───────────────────────────────────────────────────
     def _fmt_account(x):
         if isinstance(x, str):
             return x
@@ -1094,24 +1105,102 @@ with tab_table:
             return str(int(v)) if v == int(v) else f'{v:g}'
         except (TypeError, ValueError):
             return str(x)
+
+    table_df = display_df[['Account', 'Account Title']].copy()
     table_df['Account'] = table_df['Account'].apply(_fmt_account)
 
-    def _highlight_parents(row):
-        acct = row.get('Account', None)
-        try:
-            if float(acct) == int(float(acct)) and float(acct) % 10 == 0:
-                return ['background-color:#f0f4fa;font-weight:600'] * len(row)
-        except (TypeError, ValueError):
-            pass
-        return [''] * len(row)
+    _sf = display_df[_foak_std] if _foak_std else pd.Series('-', index=display_df.index)
+    _sn = display_df[_noak_std] if _noak_std else pd.Series('-', index=display_df.index)
+    table_df['FOAK Cost']  = [_pm(m, s) for m, s in zip(display_df[_foak_col], _sf)]
+    table_df['NOAK Cost']  = [_pm(m, s) for m, s in zip(display_df[_noak_col], _sn)]
 
-    _cost_cols = [c for c in table_df.columns if 'Estimated Cost' in str(c)]
+    if _have_lcoe:
+        _lsf = display_df['FOAK LCOE_std'] if 'FOAK LCOE_std' in display_df.columns \
+               else pd.Series('-', index=display_df.index)
+        _lsn = display_df['NOAK LCOE_std'] if 'NOAK LCOE_std' in display_df.columns \
+               else pd.Series('-', index=display_df.index)
+        table_df['FOAK LCOE ($/MWh)'] = [_pm(m, s) for m, s in zip(display_df['FOAK LCOE'], _lsf)]
+        table_df['NOAK LCOE ($/MWh)'] = [_pm(m, s) for m, s in zip(display_df['NOAK LCOE'], _lsn)]
+
+    # ── numeric FOAK values used for cost color scale ─────────────────────────
+    _foak_num = pd.to_numeric(display_df[_foak_col], errors='coerce') if _foak_col else None
+
+    # ── level series for row styling ──────────────────────────────────────────
+    _levels = display_df['Level'] if 'Level' in display_df.columns \
+              else pd.Series('-', index=display_df.index)
+
+    # ── row-level background + font-weight ────────────────────────────────────
+    _LEVEL_BG = {0: '#bfdbfe', 1: '#dbeafe', 2: '#eff6ff'}
+    _SUMMARY_BG = '#fef3c7'   # amber — OCC / TCI / LCOE summary rows
+
+    def _row_style(row):
+        lv = _levels.get(row.name, '-')
+        try:
+            lv = int(lv)
+        except (ValueError, TypeError):
+            lv = '-'
+
+        if lv == '-':
+            bg, fw = _SUMMARY_BG, 'font-weight:700'
+        elif lv == 0:
+            bg, fw = _LEVEL_BG[0], 'font-weight:700'
+        elif lv == 1:
+            bg, fw = _LEVEL_BG[1], 'font-weight:600'
+        elif lv == 2:
+            bg, fw = _LEVEL_BG[2], 'font-weight:500'
+        else:
+            bg, fw = '', ''
+
+        styles = []
+        for col in row.index:
+            if col in ('Account', 'Account Title'):
+                styles.append(f'background-color:{bg};{fw}' if bg else fw)
+            else:
+                styles.append(fw)
+        return styles
+
+    # ── white → light-salmon color scale on FOAK cost magnitude ──────────────
+    def _cost_color_scale(col):
+        if _foak_num is None:
+            return pd.Series('', index=col.index)
+        vals = _foak_num.reindex(col.index)
+        valid = vals[(vals > 0) & vals.notna()]
+        if valid.empty or valid.max() == valid.min():
+            return pd.Series('', index=col.index)
+        vmin, vmax = valid.min(), valid.max()
+        styles = []
+        for idx in col.index:
+            v = vals.get(idx, np.nan)
+            if pd.isna(v) or v <= 0:
+                styles.append('')
+            else:
+                t = (v - vmin) / (vmax - vmin)
+                g = int(255 - t * 80)
+                b = int(255 - t * 100)
+                styles.append(f'background-color:rgb(255,{g},{b})')
+        return pd.Series(styles, index=col.index)
+
+    # ── assemble styler ───────────────────────────────────────────────────────
+    _num_cols = [c for c in table_df.columns if c not in ('Account', 'Account Title')]
     styled = (
         table_df.style
-        .apply(_highlight_parents, axis=1)
-        .format(_fmt_table_val, subset=_cost_cols, na_rep='-')
+        .apply(_row_style, axis=1)
+        .apply(_cost_color_scale, subset=['FOAK Cost'])
+        .apply(_cost_color_scale, subset=['NOAK Cost'])
+        .set_properties(subset=_num_cols, **{'text-align': 'right', 'padding': '2px 8px'})
     )
-    st.dataframe(styled, use_container_width=True, height=580)
+
+    _col_cfg = {
+        'Account':           st.column_config.TextColumn(width='small'),
+        'Account Title':     st.column_config.TextColumn(width='medium'),
+        'FOAK Cost':         st.column_config.TextColumn(width='small'),
+        'NOAK Cost':         st.column_config.TextColumn(width='small'),
+    }
+    if _have_lcoe:
+        _col_cfg['FOAK LCOE ($/MWh)'] = st.column_config.TextColumn(width='small')
+        _col_cfg['NOAK LCOE ($/MWh)'] = st.column_config.TextColumn(width='small')
+
+    st.dataframe(styled, use_container_width=True, height=580, column_config=_col_cfg)
 
     st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
 
