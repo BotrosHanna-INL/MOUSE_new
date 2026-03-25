@@ -1188,21 +1188,31 @@ with tab_table:
     _acct_levels = [_account_level(a) for a in table_df['Account']]
     _idx_to_pos  = {idx: pos for pos, idx in enumerate(table_df.index)}
 
+    # ── indent Account Title by depth ────────────────────────────────────────
+    _EM = '\u2003'   # em-space for indentation
+    _PREFIX = {'-': '', 0: '', 1: f'{_EM}› ', 2: f'{_EM}{_EM}› ',
+               3: f'{_EM}{_EM}{_EM}· ', 4: f'{_EM}{_EM}{_EM}{_EM}· '}
+    table_df['Account Title'] = [
+        f"{_PREFIX.get(lv, _EM * 4)}{title}"
+        for lv, title in zip(_acct_levels, display_df['Account Title'])
+    ]
+
     # ── row-level colors (full row) ───────────────────────────────────────────
-    # Sky-blue gradient: deeper level = lighter; summary rows = warm amber
+    # Level 0 = deep navy header; Level 1 = soft blue; Level 2 = pale blue;
+    # Level 3+ = white; summary rows (OCC/TCI/LCOE) = pale gold
     _LEVEL_STYLE = {
-        '-': ('background-color:#fef9c3', 'font-weight:700'),   # amber  — summary
-         0:  ('background-color:#7dd3fc', 'font-weight:700'),   # sky-400 — top parent
-         1:  ('background-color:#bae6fd', 'font-weight:600'),   # sky-200
-         2:  ('background-color:#e0f2fe', 'font-weight:500'),   # sky-100
-         3:  ('background-color:#f0f9ff', 'font-weight:400'),   # sky-50
-         4:  ('background-color:#fafafa', 'font-weight:400'),   # near-white
+        '-': ('background-color:#fef9c3', 'color:#78350f', 'font-weight:700'),   # amber — summary
+         0:  ('background-color:#1e3a5f', 'color:#f0f9ff', 'font-weight:700'),   # navy  — top parent
+         1:  ('background-color:#cfe2f3', 'color:#1a2e44', 'font-weight:600'),   # steel-blue
+         2:  ('background-color:#eaf4fb', 'color:#1a2e44', 'font-weight:500'),   # pale blue
+         3:  ('background-color:#ffffff', 'color:#374151', 'font-weight:400'),   # white
+         4:  ('background-color:#ffffff', 'color:#374151', 'font-weight:400'),   # white
     }
 
     def _row_style(row):
-        lv  = _acct_levels[_idx_to_pos[row.name]]
-        bg, fw = _LEVEL_STYLE.get(lv, ('background-color:#fafafa', ''))
-        cell = f'{bg};{fw}'
+        lv = _acct_levels[_idx_to_pos[row.name]]
+        bg, fg, fw = _LEVEL_STYLE.get(lv, ('background-color:#ffffff', 'color:#374151', ''))
+        cell = f'{bg};{fg};{fw}'
         return [cell] * len(row)
 
     # ── assemble styler ───────────────────────────────────────────────────────
@@ -1213,7 +1223,7 @@ with tab_table:
         .set_properties(subset=_num_cols, **{'text-align': 'right', 'padding': '2px 8px'})
         .set_table_styles([{
             'selector': 'thead tr th',
-            'props': ('background-color:#0c4a6e;color:#f0f9ff;'
+            'props': ('background-color:#1e3a5f;color:#f0f9ff;'
                       'font-weight:600;font-size:0.75rem;'
                       'text-transform:uppercase;letter-spacing:0.05em;')
         }])
