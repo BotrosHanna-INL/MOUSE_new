@@ -89,7 +89,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import streamlit as st
 
-from reactor_config import build_params, SubcriticalError
+from reactor_config import build_params, SubcriticalError, ESCALATION_YEAR
 from cost.cost_estimation import bottom_up_cost_estimate, transform_dataframe
 from cost.cost_drivers import cost_drivers_estimate, is_double_digit_excluding_multiples_of_10
 
@@ -131,11 +131,6 @@ def _patched_read_excel(file_path, sheet_name=0, **kwargs):
 
 _pd_orig.read_excel = _patched_read_excel
 _ce.pd.read_excel = _patched_read_excel
-
-# ---------------------------------------------------------------------------
-# Escalation year — change this single value to update all cost year references.
-# ---------------------------------------------------------------------------
-ESCALATION_YEAR = 2025
 
 # ---------------------------------------------------------------------------
 # Reactor metadata: full names and design images

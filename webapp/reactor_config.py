@@ -10,6 +10,12 @@ import os
 import numpy as np
 import pandas as pd
 
+# ---------------------------------------------------------------------------
+# Single source of truth for the escalation year used across the webapp.
+# Change this value to update all cost-year references in one place.
+# ---------------------------------------------------------------------------
+ESCALATION_YEAR = 2025
+
 # openmc and watts must already be stubbed in sys.modules before this module is imported.
 from core_design.utils import (
     calculate_lattice_radius,
@@ -295,7 +301,7 @@ def _build_ltmr(params):
         'Radwaste Building Exterior Walls Volume': 0,
         'Annual Return': 0.0475,
         'NOAK Unit Number': 100,
-        'Escalation Year': 2024,
+        'Escalation Year': ESCALATION_YEAR,
         'Interest Rate': 0.07,
         'Construction Duration': 12,
         'Debt To Equity Ratio': 0.5,
@@ -498,7 +504,7 @@ def _build_gcmr(params):
         'Radwaste Building Exterior Walls Volume': 0,
         'Annual Return': 0.0475,
         'NOAK Unit Number': 100,
-        'Escalation Year': 2024,
+        'Escalation Year': ESCALATION_YEAR,
         'Interest Rate': 0.07,
         'Construction Duration': 12,
         'Debt To Equity Ratio': 0.5,
@@ -694,7 +700,7 @@ def _build_hpmr(params):
         'Radwaste Building Exterior Walls Volume': 0,
         'Annual Return': 0.0475,
         'NOAK Unit Number': 100,
-        'Escalation Year': 2024,
+        'Escalation Year': ESCALATION_YEAR,
         'Interest Rate': 0.07,
         'Construction Duration': 12,
         'Debt To Equity Ratio': 0.5,
@@ -747,8 +753,9 @@ def build_params(reactor_type, power_mwt, enrichment, user_overrides):
     # Number of Samples = 1: use deterministic class-3 estimates (no Monte Carlo sampling).
     # With Number of Samples > 1, the lognormal sampler is called with NaN bounds for
     # many database rows (those lacking low/high-end estimates), which propagates NaN
-    # through the entire cost calculation. Number of Samples = 1 uses unit_cost_0 /
-    # fixed_cost_0 directly and avoids this issue entirely.
+    # through the entire cost calculation and causes parent-account rows to appear blank
+    # in the table. Number of Samples = 1 uses unit_cost_0 / fixed_cost_0 directly and
+    # avoids this issue entirely.
     params['Number of Samples'] = 10
 
     return params
