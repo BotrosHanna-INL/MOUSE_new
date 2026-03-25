@@ -1084,6 +1084,18 @@ with tab_table:
                      if c in ('Account', 'Account Title') or 'Estimated Cost' in str(c)]
     table_df = display_df[_display_cols].copy()
 
+    # Format Account values: integers drop decimal (10.0 → '10'),
+    # floats trim trailing zeros (213.11 → '213.11'), strings pass through.
+    def _fmt_account(x):
+        if isinstance(x, str):
+            return x
+        try:
+            v = float(x)
+            return str(int(v)) if v == int(v) else f'{v:g}'
+        except (TypeError, ValueError):
+            return str(x)
+    table_df['Account'] = table_df['Account'].apply(_fmt_account)
+
     def _highlight_parents(row):
         acct = row.get('Account', None)
         try:
