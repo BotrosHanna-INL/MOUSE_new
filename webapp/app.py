@@ -1150,22 +1150,35 @@ with tab_table:
     # ── numeric FOAK values used for cost color scale ─────────────────────────
     _foak_num = pd.to_numeric(display_df[_foak_col], errors='coerce') if _foak_col else None
 
-    # ── level dict for row styling — explicit dict avoids Series.get edge cases ─
-    _level_dict = {}
-    if 'Level' in display_df.columns:
-        for _idx, _val in zip(display_df.index.tolist(), display_df['Level'].tolist()):
-            _level_dict[_idx] = _val
+    # ── derive hierarchy level from account number ────────────────────────────
+    # Level column is dropped by bottom_up_cost_estimate, so we infer it:
+    #   Level 0 → 2-digit multiple of 10  (10, 20, 60, 80)
+    #   Level 1 → 2-digit non-multiple    (11, 12, 21, 75, 82)
+    #   Level 2 → 3-digit integer         (211, 212, 311)
+    #   Level 3 → number with decimal     (211.1, 211.2)
+    #   '-'     → non-numeric             (OCC, TCI, LCOE, …)
+    def _account_level(acct_str):
+        try:
+            v = float(str(acct_str).strip())
+        except (ValueError, TypeError):
+            return '-'
+        ip = int(v)
+        n  = len(str(ip))
+        if n <= 2:
+            return 0 if ip % 10 == 0 else 1
+        elif n == 3:
+            return 3 if v != ip else 2
+        return 4
+
+    _acct_levels = [_account_level(a) for a in table_df['Account']]
+    _idx_to_pos  = {idx: pos for pos, idx in enumerate(table_df.index)}
 
     # ── row-level background + font-weight ────────────────────────────────────
     _LEVEL_BG = {0: '#bfdbfe', 1: '#dbeafe', 2: '#eff6ff', 3: '#f8fafc', 4: '#f8fafc'}
     _SUMMARY_BG = '#fef3c7'   # amber — OCC / TCI / LCOE summary rows
 
     def _row_style(row):
-        raw = _level_dict.get(row.name, '-')
-        try:
-            lv = int(raw)
-        except (ValueError, TypeError):
-            lv = '-'
+        lv = _acct_levels[_idx_to_pos[row.name]]
 
         if lv == '-':
             bg, fw = _SUMMARY_BG, 'font-weight:700'
