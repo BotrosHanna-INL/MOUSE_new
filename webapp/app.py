@@ -1064,10 +1064,11 @@ with tab_drivers:
                            edgecolor='#e5e7eb', facecolor='white',
                            loc='upper right', handlelength=1.5)
         legend.get_frame().set_linewidth(0.8)
-
         plt.tight_layout(pad=1.5)
-        fig.set_dpi(200) 
-        st.pyplot(fig, use_container_width=True)
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=200, bbox_inches='tight')
+        buf.seek(0)
+        st.image(buf, use_container_width=True)
         plt.close(fig)
 
 # ═══════════════════════════════════════════════════════════════
