@@ -1013,6 +1013,7 @@ with tab_drivers:
         is_double_digit_excluding_multiples_of_10)].copy()
     _drv = _drv.sort_values('FOAK LCOE', ascending=False)
     _drv = _drv[_drv['FOAK LCOE'] >= 5]
+    _drv = _drv.head(10) # consider the first 10 cost drivers only
 
     if _drv.empty:
         st.info('No accounts with FOAK LCOE ≥ 5 $/MWh found.')
@@ -1065,6 +1066,7 @@ with tab_drivers:
         legend.get_frame().set_linewidth(0.8)
 
         plt.tight_layout(pad=1.5)
+        fig.set_dpi(200) 
         st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
