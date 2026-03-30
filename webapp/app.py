@@ -95,14 +95,6 @@ from cost.cost_drivers import cost_drivers_estimate, is_double_digit_excluding_m
 
 # ---------------------------------------------------------------------------
 # Performance patches: cache Excel reads that would otherwise repeat on every run.
-#
-# Bottleneck 1 — calculate_inflation_multiplier calls pd.read_excel once per
-#   cost-database row.  Fixed with lru_cache (keyed on file + year + type).
-#
-# Bottleneck 2 — escalate_cost_database calls pd.read_excel twice (Cost Database
-#   sheet + Economics Parameters sheet) on every bottom_up_cost_estimate call.
-#   We patch pd.read_excel itself with an lru_cache so the same file+sheet
-#   combination is only parsed once per process lifetime.
 # ---------------------------------------------------------------------------
 import functools
 import cost.cost_escalation as _ce
@@ -115,7 +107,6 @@ def _cached_inflation_multiplier(file_path, base_dollar_year, cost_type, escalat
 
 _ce.calculate_inflation_multiplier = _cached_inflation_multiplier
 
-# Cache pd.read_excel for the cost database (file content never changes at runtime).
 import pandas as _pd_orig
 _orig_read_excel = _pd_orig.read_excel
 
@@ -124,7 +115,6 @@ def _cached_read_excel(file_path, sheet_name):
     return _orig_read_excel(file_path, sheet_name=sheet_name)
 
 def _patched_read_excel(file_path, sheet_name=0, **kwargs):
-    # Only cache reads of the Cost_Database.xlsx; pass everything else through.
     if isinstance(file_path, str) and file_path.endswith('Cost_Database.xlsx') and not kwargs:
         return _cached_read_excel(file_path, sheet_name).copy()
     return _orig_read_excel(file_path, sheet_name=sheet_name, **kwargs)
@@ -682,11 +672,11 @@ with st.sidebar:
         'https://qualtricsxm69xy9s7vm.qualtrics.com/jfe/form/SV_4Pb0vub9xCcsVV4',
         use_container_width=True,
     )
+
 # ---------------------------------------------------------------------------
 # Welcome banner (shown only before first run)
 # ---------------------------------------------------------------------------
 if not run_button:
-    # ── Hero banner ──────────────────────────────────────────────────────────
     st.markdown(
         f'''<div style="background:linear-gradient(135deg,#0b1f3a 0%,#1B4F8C 55%,#1e6fa8 100%);
                        border-radius:18px;padding:3rem 3rem 2.8rem;color:white;
@@ -756,7 +746,6 @@ if not run_button:
         unsafe_allow_html=True,
     )
 
-    # ── Caveats box ──────────────────────────────────────────────────────────
     st.markdown(
         '''<div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:12px;
                        padding:1.2rem 1.5rem;margin-bottom:1rem;">
@@ -815,7 +804,7 @@ with st.spinner('Running cost estimate…'):
         st.stop()
 
 # ---------------------------------------------------------------------------
-# Extract key params (capacity factor sourced from operation.py via params)
+# Extract key params
 # ---------------------------------------------------------------------------
 fuel_lifetime   = params.get('Fuel Lifetime', float('nan'))
 power_mwe       = params.get('Power MWe', float('nan'))
@@ -908,7 +897,6 @@ lcof_n, lcof_n_std = _get_lcof(enriched_df, 'NOAK')
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-# ── Persistent caveat reminder (compact) ────────────────────────────────────
 st.markdown(
     '''<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;
                    padding:0.65rem 1rem;margin-bottom:1.2rem;
@@ -935,7 +923,6 @@ tab_summary, tab_drivers, tab_table = st.tabs([
 # ═══════════════════════════════════════════════════════════════
 with tab_summary:
 
-    # ── Reactor image ─────────────────────────────────────────
     img_col, info_col = st.columns([1, 1], gap='large')
 
     with img_col:
@@ -948,7 +935,6 @@ with tab_summary:
                 st.caption(img_caption)
 
     with info_col:
-        # ── Info cards: Power, Fuel Lifetime & Capacity Factor ─
         ic1, ic2, ic3 = st.columns(3)
         _info_card(ic1, 'Electric Power Output', f'{power_mwe:.1f} MWe',
                    subtitle=f'Thermal input: {power_mwt} MWt')
@@ -958,7 +944,6 @@ with tab_summary:
 
         st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
 
-        # ── OCC ─────────────────────────────────────────────────
         st.markdown(
             '<div style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;'
             'letter-spacing:0.09em;margin-bottom:0.6rem;">Capital Costs</div>',
@@ -974,7 +959,6 @@ with tab_summary:
 
         st.markdown('<div style="height:0.75rem"></div>', unsafe_allow_html=True)
 
-        # ── Levelized costs ──────────────────────────────────────
         st.markdown(
             '<div style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;'
             'letter-spacing:0.09em;margin-bottom:0.6rem;">Levelized Costs</div>',
@@ -991,7 +975,6 @@ with tab_summary:
                   _fmt_lcoe(lcof_f, lcof_f_std), _fmt_lcoe(lcof_n, lcof_n_std),
                   color=_CARD_COLORS['lcof'])
 
-    # ── FOAK / NOAK legend note ────────────────────────────────
     st.markdown(
         '<div style="margin-top:1.2rem;padding:0.7rem 1rem;background:#f8fafc;'
         'border-radius:8px;border:1px solid #e2e8f0;font-size:0.78rem;color:#64748b;">'
@@ -1013,7 +996,7 @@ with tab_drivers:
         is_double_digit_excluding_multiples_of_10)].copy()
     _drv = _drv.sort_values('FOAK LCOE', ascending=False)
     _drv = _drv[_drv['FOAK LCOE'] >= 5]
-    _drv = _drv.head(10) # consider the first 10 cost drivers only
+    _drv = _drv.head(10)
 
     if _drv.empty:
         st.info('No accounts with FOAK LCOE ≥ 5 $/MWh found.')
@@ -1029,47 +1012,61 @@ with tab_drivers:
         r1 = np.arange(len(_drv))
         r2 = r1 + bar_width
 
-        fig, ax = plt.subplots(figsize=(max(11, len(_drv) * 1.5), 6))
+        matplotlib.rcParams.update({
+            'font.family':    'DejaVu Sans',
+            'font.size':       13,
+            'axes.titlesize':  15,
+            'axes.labelsize':  13,
+            'xtick.labelsize': 12,
+            'ytick.labelsize': 12,
+        })
+
+        fig, ax = plt.subplots(figsize=(max(13, len(_drv) * 1.6), 7))
         fig.patch.set_facecolor('white')
-        ax.set_facecolor('white')
+        ax.set_facecolor('#f8fafc')
 
         foak_err = _drv['FOAK LCOE_std'] if 'FOAK LCOE_std' in _drv.columns else None
         noak_err = _drv['NOAK LCOE_std'] if 'NOAK LCOE_std' in _drv.columns else None
 
-        bars_f = ax.bar(r1, _drv['FOAK LCOE'], width=bar_width,
-                        color='#E05C2B', edgecolor='white', linewidth=0.6,
-                        label='FOAK', zorder=3,
-                        yerr=foak_err, capsize=5,
-                        error_kw=dict(elinewidth=1.5, ecolor='#b84520', capthick=1.5))
-        bars_n = ax.bar(r2, _drv['NOAK LCOE'], width=bar_width,
-                        color='#1B7FBD', edgecolor='white', linewidth=0.6,
-                        label='NOAK', zorder=3,
-                        yerr=noak_err, capsize=5,
-                        error_kw=dict(elinewidth=1.5, ecolor='#1155aa', capthick=1.5))
+        ax.bar(r1, _drv['FOAK LCOE'], width=bar_width,
+               color='#E05C2B', edgecolor='white', linewidth=0.8,
+               label='FOAK', zorder=3,
+               yerr=foak_err, capsize=5,
+               error_kw=dict(elinewidth=1.8, ecolor='#9a3412', capthick=1.8))
+        ax.bar(r2, _drv['NOAK LCOE'], width=bar_width,
+               color='#1B7FBD', edgecolor='white', linewidth=0.8,
+               label='NOAK', zorder=3,
+               yerr=noak_err, capsize=5,
+               error_kw=dict(elinewidth=1.8, ecolor='#1155aa', capthick=1.8))
 
         ax.set_xticks(r1 + bar_width / 2)
-        ax.set_xticklabels(_drv['Account Title'], rotation=40, ha='right',
-                           fontsize=10, color='#374151')
-        ax.set_ylabel('LCOE Contribution ($/MWh)', fontsize=11, color='#374151')
-        ax.yaxis.set_tick_params(labelcolor='#374151', labelsize=10)
-        ax.set_xlim(-0.3, len(_drv) - 0.2)
+        ax.set_xticklabels(_drv['Account Title'], rotation=35, ha='right',
+                           fontsize=12, color='#1e293b', fontweight='500')
+        ax.set_ylabel('LCOE Contribution ($/MWh)', fontsize=13,
+                      color='#1e293b', labelpad=10)
+        ax.yaxis.set_tick_params(labelcolor='#1e293b', labelsize=12)
+        ax.set_xlim(-0.4, len(_drv) - 0.15)
 
         for spine in ['top', 'right', 'left']:
             ax.spines[spine].set_visible(False)
-        ax.spines['bottom'].set_color('#e5e7eb')
-        ax.yaxis.grid(True, linestyle='--', linewidth=0.6, alpha=0.6, color='#d1d5db', zorder=0)
+        ax.spines['bottom'].set_color('#cbd5e1')
+        ax.yaxis.grid(True, linestyle='--', linewidth=0.7,
+                      alpha=0.7, color='#cbd5e1', zorder=0)
         ax.set_axisbelow(True)
 
-        legend = ax.legend(fontsize=11, frameon=True, framealpha=1,
-                           edgecolor='#e5e7eb', facecolor='white',
-                           loc='upper right', handlelength=1.5)
-        legend.get_frame().set_linewidth(0.8)
-        plt.tight_layout(pad=1.5)
+        legend = ax.legend(fontsize=12, frameon=True, framealpha=1,
+                           edgecolor='#e2e8f0', facecolor='white',
+                           loc='upper right', handlelength=1.5,
+                           borderpad=0.8, labelspacing=0.5)
+        legend.get_frame().set_linewidth(1.0)
+
+        plt.tight_layout(pad=2.0)
         buf = io.BytesIO()
-        fig.savefig(buf, format='png', dpi=200, bbox_inches='tight')
+        fig.savefig(buf, format='png', dpi=200, bbox_inches='tight', facecolor='white')
         buf.seek(0)
         st.image(buf, use_container_width=True)
         plt.close(fig)
+        matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 
 # ═══════════════════════════════════════════════════════════════
 # TAB 3 — FULL BREAKDOWN
@@ -1082,7 +1079,6 @@ with tab_table:
         unsafe_allow_html=True,
     )
 
-    # ── resolve column names ──────────────────────────────────────────────────
     _foak_col = next((c for c in display_df.columns
                       if c.startswith('FOAK Estimated Cost (') and 'std' not in c), None)
     _noak_col = next((c for c in display_df.columns
@@ -1091,7 +1087,6 @@ with tab_table:
     _noak_std = next((c for c in display_df.columns if 'NOAK Estimated Cost std' in c), None)
     _have_lcoe = 'FOAK LCOE' in enriched_df.columns
 
-    # ── range formatter for costs: [mean-std – mean+std] ─────────────────────
     def _pm(mean_val, std_val):
         m = _fmt_table_val(mean_val)
         if m == '-':
@@ -1107,8 +1102,7 @@ with tab_table:
         hi = _fmt_table_val(mn + sd)
         return f'{lo} – {hi}' if lo != hi else lo
 
-    # ── LCOE formatter — uses pre-transform floats for sub-$/MWh precision ───
-    def _fmt_lcoe(v):
+    def _fmt_lcoe_tab(v):
         try:
             v = float(v)
         except (TypeError, ValueError):
@@ -1122,7 +1116,7 @@ with tab_table:
         return str(int(round(v)))
 
     def _pm_lcoe(mean_val, std_val):
-        m = _fmt_lcoe(mean_val)
+        m = _fmt_lcoe_tab(mean_val)
         if m == '-':
             return '-'
         try:
@@ -1132,13 +1126,10 @@ with tab_table:
             return m
         if np.isnan(sd) or sd <= 0:
             return m
-        lo = _fmt_lcoe(max(0.0, mn - sd))
-        hi = _fmt_lcoe(mn + sd)
-        if lo == hi:
-            return lo
-        return f'{lo} – {hi}'
+        lo = _fmt_lcoe_tab(max(0.0, mn - sd))
+        hi = _fmt_lcoe_tab(mn + sd)
+        return lo if lo == hi else f'{lo} – {hi}'
 
-    # ── build display table ───────────────────────────────────────────────────
     def _fmt_account(x):
         if isinstance(x, str):
             return x
@@ -1153,14 +1144,13 @@ with tab_table:
 
     _sf = display_df[_foak_std] if _foak_std else pd.Series('-', index=display_df.index)
     _sn = display_df[_noak_std] if _noak_std else pd.Series('-', index=display_df.index)
-    table_df['FOAK Cost']  = [_pm(m, s) for m, s in zip(display_df[_foak_col], _sf)]
-    table_df['NOAK Cost']  = [_pm(m, s) for m, s in zip(display_df[_noak_col], _sn)]
+    table_df['FOAK Cost'] = [_pm(m, s) for m, s in zip(display_df[_foak_col], _sf)]
+    table_df['NOAK Cost'] = [_pm(m, s) for m, s in zip(display_df[_noak_col], _sn)]
 
     if _have_lcoe:
-        # Use enriched_df (pre-transform) for float LCOE values; reindex to match display_df rows
-        _ei = display_df.index
-        _e_fl = enriched_df['FOAK LCOE'].reindex(_ei)
-        _e_nl = enriched_df['NOAK LCOE'].reindex(_ei)
+        _ei  = display_df.index
+        _e_fl  = enriched_df['FOAK LCOE'].reindex(_ei)
+        _e_nl  = enriched_df['NOAK LCOE'].reindex(_ei)
         _e_fls = enriched_df['FOAK LCOE_std'].reindex(_ei) \
                  if 'FOAK LCOE_std' in enriched_df.columns else pd.Series(np.nan, index=_ei)
         _e_nls = enriched_df['NOAK LCOE_std'].reindex(_ei) \
@@ -1168,13 +1158,6 @@ with tab_table:
         table_df['FOAK LCOE ($/MWh)'] = [_pm_lcoe(m, s) for m, s in zip(_e_fl, _e_fls)]
         table_df['NOAK LCOE ($/MWh)'] = [_pm_lcoe(m, s) for m, s in zip(_e_nl, _e_nls)]
 
-    # ── derive hierarchy level from account number ────────────────────────────
-    # Level column is dropped by bottom_up_cost_estimate, so we infer it:
-    #   Level 0 → 2-digit multiple of 10  (10, 20, 60, 80)
-    #   Level 1 → 2-digit non-multiple    (11, 12, 21, 75, 82)
-    #   Level 2 → 3-digit integer         (211, 212, 311)
-    #   Level 3 → number with decimal     (211.1, 211.2)
-    #   '-'     → non-numeric             (OCC, TCI, LCOE, …)
     def _account_level(acct_str):
         try:
             v = float(str(acct_str).strip())
@@ -1191,8 +1174,7 @@ with tab_table:
     _acct_levels = [_account_level(a) for a in table_df['Account']]
     _idx_to_pos  = {idx: pos for pos, idx in enumerate(table_df.index)}
 
-    # ── indent Account Title by depth ────────────────────────────────────────
-    _EM = '\u2003'   # em-space for indentation
+    _EM = '\u2003'
     _PREFIX = {'-': '', 0: '', 1: f'{_EM}› ', 2: f'{_EM}{_EM}› ',
                3: f'{_EM}{_EM}{_EM}· ', 4: f'{_EM}{_EM}{_EM}{_EM}· '}
     table_df['Account Title'] = [
@@ -1200,16 +1182,13 @@ with tab_table:
         for lv, title in zip(_acct_levels, display_df['Account Title'])
     ]
 
-    # ── row-level colors (full row) ───────────────────────────────────────────
-    # Level 0 = deep navy header; Level 1 = soft blue; Level 2 = pale blue;
-    # Level 3+ = white; summary rows (OCC/TCI/LCOE) = pale gold
     _LEVEL_STYLE = {
-        '-': ('background-color:#fef9c3', 'color:#78350f', 'font-weight:700'),   # amber — summary
-         0:  ('background-color:#1e3a5f', 'color:#f0f9ff', 'font-weight:700'),   # navy  — top parent
-         1:  ('background-color:#cfe2f3', 'color:#1a2e44', 'font-weight:600'),   # steel-blue
-         2:  ('background-color:#eaf4fb', 'color:#1a2e44', 'font-weight:500'),   # pale blue
-         3:  ('background-color:#ffffff', 'color:#374151', 'font-weight:400'),   # white
-         4:  ('background-color:#ffffff', 'color:#374151', 'font-weight:400'),   # white
+        '-': ('background-color:#fef9c3', 'color:#78350f', 'font-weight:700'),
+         0:  ('background-color:#1e3a5f', 'color:#f0f9ff', 'font-weight:700'),
+         1:  ('background-color:#cfe2f3', 'color:#1a2e44', 'font-weight:600'),
+         2:  ('background-color:#eaf4fb', 'color:#1a2e44', 'font-weight:500'),
+         3:  ('background-color:#ffffff', 'color:#374151', 'font-weight:400'),
+         4:  ('background-color:#ffffff', 'color:#374151', 'font-weight:400'),
     }
 
     def _row_style(row):
@@ -1218,7 +1197,6 @@ with tab_table:
         cell = f'{bg};{fg};{fw}'
         return [cell] * len(row)
 
-    # ── assemble styler ───────────────────────────────────────────────────────
     _num_cols = [c for c in table_df.columns if c not in ('Account', 'Account Title')]
     styled = (
         table_df.style
@@ -1233,10 +1211,10 @@ with tab_table:
     )
 
     _col_cfg = {
-        'Account':           st.column_config.TextColumn(width='small'),
-        'Account Title':     st.column_config.TextColumn(width='medium'),
-        'FOAK Cost':         st.column_config.TextColumn(width='small'),
-        'NOAK Cost':         st.column_config.TextColumn(width='small'),
+        'Account':       st.column_config.TextColumn(width='small'),
+        'Account Title': st.column_config.TextColumn(width='medium'),
+        'FOAK Cost':     st.column_config.TextColumn(width='small'),
+        'NOAK Cost':     st.column_config.TextColumn(width='small'),
     }
     if _have_lcoe:
         _col_cfg['FOAK LCOE ($/MWh)'] = st.column_config.TextColumn(width='small')
@@ -1247,7 +1225,6 @@ with tab_table:
 
     st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
 
-    # Download (full df including LCOE contribution cols)
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         display_df.to_excel(writer, index=False, sheet_name='Cost Estimate')
