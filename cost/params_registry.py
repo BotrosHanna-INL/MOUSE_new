@@ -1039,7 +1039,12 @@ PARAMS_REGISTRY = {
     # =========================================================
     'Interest Rate': {
         'group': 'Economic Parameters', 'units': 'fraction',
-        'description': 'Annual discount rate used for LCOE levelization (weighted average cost of capital)',
+        'description': 'Annual cost of debt used to calculate interest during construction (Account 62)',
+        'source': 'User Input', 'hidden': False, 'array_mode': None},
+
+    'Discount Rate': {
+        'group': 'Economic Parameters', 'units': 'fraction',
+        'description': 'Annual discount rate (WACC) used for LCOE levelization and cost annualization',
         'source': 'User Input', 'hidden': False, 'array_mode': None},
 
     'Construction Duration': {

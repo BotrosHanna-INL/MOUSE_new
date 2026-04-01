@@ -299,6 +299,7 @@ update_params({
     'Radwaste Building Exterior Walls Volume': 0,  # m^3,
     
     'Interest Rate': 0.07,
+    'Discount Rate': 0.07,
     'Construction Duration': 12,  # months
     'Debt To Equity Ratio': 1,
     'Annual Return': 0.0475,  # Annual return on decommissioning costs

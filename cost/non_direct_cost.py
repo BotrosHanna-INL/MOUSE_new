@@ -27,13 +27,16 @@ def _crf(rate, period):
     # Returns the Capital Recovery Factor (CRF) based on the discount rate and period.
     # CRF converts a present value into a series of equal annual payments.
     # Formula: CRF = rate * (1 + rate)^period / ((1 + rate)^period - 1)
+    # Special case: when rate == 0, CRF = 1/period (straight-line amortization, no interest)
+    period = np.asarray(period, dtype=float)
+    rate   = np.asarray(rate,   dtype=float)
+    if rate.ndim == 0 and rate == 0:
+        # scalar zero rate: straight-line amortization
+        factor = np.where(period == 0, 0.0, 1.0 / period)
+        return float(factor) if factor.ndim == 0 else factor
     numer = rate * (1 + rate)**period
     denum = (1 + rate)**period - 1
-    factor = numer/denum 
-    
-    ## If components are not set for replacement (i.e. period == 0) return 0
-    if np.array(factor).size > 1:
-        factor[factor == np.inf] = 0
+    factor = np.where(denum == 0, 0.0, numer / denum)
     return factor
 
 
@@ -66,7 +69,7 @@ def calculate_accounts_31_32_75_82_cost(df, params):
                                          df.loc[df['Account'] == 221.31,  estimated_cost_col].values.sum(),
                                          df.loc[df['Account'] == 221.2,   estimated_cost_col].values.sum(),
                                          df.loc[df['Account'].isin([222.1, 222.2, 222.3, 222.61]), estimated_cost_col].values.sum()])
-            annualized_replacement_cost = (A20_capital_cost*_crf(params['Interest Rate'], A20_replacement_period))
+            annualized_replacement_cost = (A20_capital_cost*_crf(params['Discount Rate'], A20_replacement_period))
             A20_other_cost = df.loc[df['Account'] == 20, estimated_cost_col].values[0] - A20_capital_cost.sum()
             annualized_other_cost = A20_other_cost * params['Maintenance to Direct Cost Ratio']
             df.loc[df['Account'] == 751, estimated_cost_col] = annualized_replacement_cost[0]
@@ -80,7 +83,7 @@ def calculate_accounts_31_32_75_82_cost(df, params):
             df.loc[df['Account'] == 75, estimated_cost_col] = df.loc[df['Account'] == 20, estimated_cost_col].values[0] * params['Maintenance to Direct Cost Ratio']
 
         lump_fuel_cost = df.loc[df['Account'] == 25, estimated_cost_col].values[0]
-        annualized_fuel_cost = lump_fuel_cost*_crf(params['Interest Rate'], refueling_period_yr)
+        annualized_fuel_cost = lump_fuel_cost*_crf(params['Discount Rate'], refueling_period_yr)
         df.loc[df['Account'] == 82, estimated_cost_col] = annualized_fuel_cost
 
     return df
@@ -338,7 +341,7 @@ def energy_cost_levelized(params, df):
     params.setdefault('Tax Rate', 0.21)
 
     plant_lifetime_years = params['Levelization Period']
-    discount_rate        = params['Interest Rate']
+    discount_rate        = params['Discount Rate']
     power_MWe            = params['Power MWe']
     capacity_factor      = params['Capacity Factor']
     thermal_efficiency   = params['Thermal Efficiency']
