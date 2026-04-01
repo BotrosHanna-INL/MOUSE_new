@@ -168,10 +168,10 @@ def calculate_high_level_capital_costs(df, params):
     power_kWe = 1000 * params['Power MWe']
     accounts_to_sum = [10, 20, 30, 40, 50]
 
-    df = df._append({'Account': 'OCC','Account Title' : 'Overnight Capital Cost'}, ignore_index=True)
-    df = df._append({'Account': 'OCC per kW','Account Title' : 'Overnight Capital Cost per kW' }, ignore_index=True)
-    df = df._append({'Account': 'OCC excl. fuel','Account Title' : 'Overnight Capital Cost Excluding Fuel'}, ignore_index=True)
-    df = df._append({'Account': 'OCC excl. fuel per kW','Account Title' : 'Overnight Capital Cost Excluding Fuel per kW'}, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'OCC','Account Title' : 'Overnight Capital Cost'}])], ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'OCC per kW','Account Title' : 'Overnight Capital Cost per kW' }])], ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'OCC excl. fuel','Account Title' : 'Overnight Capital Cost Excluding Fuel'}])], ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'OCC excl. fuel per kW','Account Title' : 'Overnight Capital Cost Excluding Fuel per kW'}])], ignore_index=True)
 
     cost_column_F = get_estimated_cost_column(df, 'F')
     cost_column_N = get_estimated_cost_column(df, 'N')
@@ -194,7 +194,7 @@ def calculate_high_level_capital_costs_central_facility(df, params):
     power_kWe = 1000 * params['Power MWe'] * params['Maximum Number of Operating Reactors']
     accounts_to_sum = [10, 20, 30, 40, 50]
 
-    df = df._append({'Account': 'OCC', 'Account Title': 'Overnight Capital Cost'}, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'OCC', 'Account Title': 'Overnight Capital Cost'}])], ignore_index=True)
 
     cost_column_F = get_estimated_cost_column(df, 'F')
     cost_column_N = get_estimated_cost_column(df, 'N')
@@ -211,8 +211,8 @@ def calculate_TCI_central(df, params):
     """Calculate Total Capital Investment for central facility."""
     power_kWe = 1000 * params['Power MWe'] * params['Maximum Number of Operating Reactors']
 
-    df = df._append({'Account': 'TCI', 'Account Title': 'Total Capital Investment'}, ignore_index=True)
-    df = df._append({'Account': 'TCI per kW', 'Account Title': 'Total Capital Investment per kW'}, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'TCI', 'Account Title': 'Total Capital Investment'}])], ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'TCI per kW', 'Account Title': 'Total Capital Investment per kW'}])], ignore_index=True)
 
     accounts_to_sum = ['OCC', 60]
     cost_column_F = get_estimated_cost_column(df, 'F')
@@ -268,15 +268,15 @@ def calculate_TCI(df, params):
     # -----------------------------------------------------------------------------------------
     power_kWe = 1000 * params['Power MWe']
 
-    df = df._append({'Account': 'TCI','Account Title' : 'Total Capital Investment'}, ignore_index=True)
-    df = df._append({'Account': 'TCI per kW','Account Title' : 'Total Capital Investment per kW'}, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'TCI','Account Title' : 'Total Capital Investment'}])], ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'TCI per kW','Account Title' : 'Total Capital Investment per kW'}])], ignore_index=True)
 
     if 'ITC credit level' in params.keys():
         # Add ITC-adjusted output rows to the dataframe
-        df = df._append({'Account': 'OCC (ITC-adjusted)',        'Account Title': 'Overnight Capital Cost Adjusted for the Investment Tax Credit'}, ignore_index=True)
-        df = df._append({'Account': 'OCC (ITC-adjusted) per kW', 'Account Title': 'Overnight Capital Cost Adjusted for the Investment Tax Credit per kW'}, ignore_index=True)
-        df = df._append({'Account': 'TCI (ITC-adjusted)',        'Account Title': 'Total Capital Investment Adjusted for the Investment Tax Credit'}, ignore_index=True)
-        df = df._append({'Account': 'TCI (ITC-adjusted) per kW', 'Account Title': 'Total Capital Investment Adjusted for the Investment Tax Credit per kW'}, ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([{'Account': 'OCC (ITC-adjusted)',        'Account Title': 'Overnight Capital Cost Adjusted for the Investment Tax Credit'}])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([{'Account': 'OCC (ITC-adjusted) per kW', 'Account Title': 'Overnight Capital Cost Adjusted for the Investment Tax Credit per kW'}])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([{'Account': 'TCI (ITC-adjusted)',        'Account Title': 'Total Capital Investment Adjusted for the Investment Tax Credit'}])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([{'Account': 'TCI (ITC-adjusted) per kW', 'Account Title': 'Total Capital Investment Adjusted for the Investment Tax Credit per kW'}])], ignore_index=True)
         # note: ITC_cost_reduction_factor is computed inside the loop below for each cost column (FOAK and NOAK)
 
     accounts_to_sum = ['OCC', 60]
@@ -322,18 +322,18 @@ def energy_cost_levelized(params, df):
     HEAT_OCC_FACTOR         = 0.795  # OCC for heat = OCC_electric × 0.795
     HEAT_ANNUAL_COST_FACTOR = 0.966  # Annual O&M+fuel cost for heat = baseline × 0.966
 
-    df = df._append({'Account': 'AC',         'Account Title': 'Annualized Cost'}, ignore_index=True)
-    df = df._append({'Account': 'AC per MWh', 'Account Title': 'Annualized Cost per MWh'}, ignore_index=True)
-    df = df._append({'Account': 'LCOE',       'Account Title': 'Levelized Cost Of Energy ($/MWh)'}, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'AC',         'Account Title': 'Annualized Cost'}])], ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'AC per MWh', 'Account Title': 'Annualized Cost per MWh'}])], ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'LCOE',       'Account Title': 'Levelized Cost Of Energy ($/MWh)'}])], ignore_index=True)
 
     if 'PTC credit value' in params.keys():
-        df = df._append({'Account': 'LCOE with PTC', 'Account Title': 'Levelized Cost Of Energy with PTC ($/MWh)'}, ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([{'Account': 'LCOE with PTC', 'Account Title': 'Levelized Cost Of Energy with PTC ($/MWh)'}])], ignore_index=True)
 
     if 'ITC credit level' in params.keys():
         assert 'PTC credit value' not in params.keys(), '--error: Only PTC or ITC or None must be selected not both.'
-        df = df._append({'Account': 'LCOE (ITC-adjusted)', 'Account Title': 'Levelized Cost Of Energy Adjusted for the Investment Tax Credit ($/MWh)'}, ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([{'Account': 'LCOE (ITC-adjusted)', 'Account Title': 'Levelized Cost Of Energy Adjusted for the Investment Tax Credit ($/MWh)'}])], ignore_index=True)
 
-    df = df._append({'Account': 'LCOH',       'Account Title': 'Levelized Cost Of Heat ($/MWth)'}, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'Account': 'LCOH',       'Account Title': 'Levelized Cost Of Heat ($/MWth)'}])], ignore_index=True)
 
     params.setdefault('Tax Rate', 0.21)
 
