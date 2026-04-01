@@ -303,6 +303,7 @@ def _build_ltmr(params):
         'NOAK Unit Number': 100,
         'Escalation Year': ESCALATION_YEAR,
         'Interest Rate': 0.07,
+        'Discount Rate': 0.07,
         'Construction Duration': 12,
         'Debt To Equity Ratio': 0.5,
     })
@@ -506,6 +507,7 @@ def _build_gcmr(params):
         'NOAK Unit Number': 100,
         'Escalation Year': ESCALATION_YEAR,
         'Interest Rate': 0.07,
+        'Discount Rate': 0.07,
         'Construction Duration': 12,
         'Debt To Equity Ratio': 0.5,
     })
@@ -702,6 +704,7 @@ def _build_hpmr(params):
         'NOAK Unit Number': 100,
         'Escalation Year': ESCALATION_YEAR,
         'Interest Rate': 0.07,
+        'Discount Rate': 0.07,
         'Construction Duration': 12,
         'Debt To Equity Ratio': 0.5,
     })

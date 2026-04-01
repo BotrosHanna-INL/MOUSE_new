@@ -40,7 +40,7 @@ def energy_cost_levelized_per_acct(params, capital_cost, ann_cost):
             year_cap  = 0
             year_ann  = ann_cost
             year_elec = params['Power MWe'] * params['Capacity Factor'] * 365 * 24  # MWh
-        discount = (1 + params['Interest Rate']) ** i
+        discount = (1 + params['Discount Rate']) ** i
         sum_cost += (year_cap + year_ann) / discount
         sum_elec += year_elec / discount
     return sum_cost / sum_elec

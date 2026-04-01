@@ -218,12 +218,13 @@ _REACTOR_IMAGES = {
 # Cached cost estimate (module-level so cache persists across reruns)
 # ---------------------------------------------------------------------------
 @st.cache_data(show_spinner=False)
-def _run_estimate(reactor_type, power_mwt, enrichment, interest_rate,
+def _run_estimate(reactor_type, power_mwt, enrichment, interest_rate, discount_rate,
                   construction_duration, debt_to_equity, operation_mode,
                   emergency_shutdowns, startup_duration, startup_duration_refueling,
                   tax_credit_type, tax_credit_value):
     overrides = {
         'Interest Rate': interest_rate,
+        'Discount Rate': discount_rate,
         'Construction Duration': construction_duration,
         'Debt To Equity Ratio': debt_to_equity,
         'Escalation Year': ESCALATION_YEAR,
@@ -622,8 +623,22 @@ with st.sidebar:
 
     interest_rate = st.number_input(
         'Interest Rate (%)',
-        min_value=0.0, max_value=30.0, value=7.0, step=0.5, format='%.1f',
-        help='Annual interest rate used in financing cost calculations.',
+        min_value=2.0, max_value=15.0, value=7.0, step=0.5, format='%.1f',
+        help=(
+            'Annual cost of debt — the rate at which the project borrows money to finance construction. '
+            'Used only to calculate interest expenses during construction (Account 62). '
+            'Typical range: 2–15%. Nuclear projects commonly use 5–12%.'
+        ),
+    )
+    discount_rate = st.number_input(
+        'Discount Rate (%)',
+        min_value=3.0, max_value=15.0, value=7.0, step=0.5, format='%.1f',
+        help=(
+            'Annual discount rate (Weighted Average Cost of Capital, WACC) — reflects the '
+            'opportunity cost of capital and the time value of money. Used for LCOE/LCOH '
+            'levelization and cost annualization. Should be ≥ interest rate. '
+            'Typical range: 3–15%. Government/public projects: 3–7%; private nuclear: 8–15%.'
+        ),
     )
     construction_duration = st.number_input(
         'Construction Duration (months)',
@@ -783,7 +798,7 @@ with st.spinner('Running cost estimate…'):
     try:
         display_df, enriched_df, params = _run_estimate(
             reactor_type, power_mwt, enrichment,
-            interest_rate / 100.0, construction_duration, debt_to_equity,
+            interest_rate / 100.0, discount_rate / 100.0, construction_duration, debt_to_equity,
             operation_mode, emergency_shutdowns, startup_duration, startup_duration_refueling,
             tax_credit_type, tax_credit_value,
         )
@@ -848,6 +863,10 @@ st.markdown(
            <div>
              <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;opacity:0.55;">Interest Rate</div>
              <div style="font-weight:700;font-size:0.95rem;">{interest_rate:.1f}%</div>
+           </div>
+           <div>
+             <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;opacity:0.55;">Discount Rate</div>
+             <div style="font-weight:700;font-size:0.95rem;">{discount_rate:.1f}%</div>
            </div>
            <div>
              <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;opacity:0.55;">Operation Mode</div>
