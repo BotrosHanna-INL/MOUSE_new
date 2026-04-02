@@ -1083,7 +1083,7 @@ with streamlit_analytics.track():
              <div style="display:flex;gap:2rem;flex-wrap:wrap;">
                <div>
                  <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;opacity:0.55;">Thermal Power</div>
-                 <div style="font-weight:700;font-size:0.95rem;">{power_mwt} MWt</div>
+                 <div style="font-weight:700;font-size:0.95rem;">{power_mwt} MW<sub>t</sub></div>
                </div>
                <div>
                  <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;opacity:0.55;">Enrichment</div>
