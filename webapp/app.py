@@ -893,8 +893,9 @@ with streamlit_analytics.track():
             use_container_width=True,
         )
 
-        st.divider()
-        _render_analytics_sidebar(analytics_conn)
+        if st.secrets.get("SHOW_ANALYTICS_PANEL", False):
+            st.divider()
+            _render_analytics_sidebar(analytics_conn)
 
     # ── Welcome banner ──────────────────────────────────────────────────────
     if not run_button:
