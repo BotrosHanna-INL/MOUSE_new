@@ -78,16 +78,18 @@ def interpolate_openmc_results(reactor_type, power_mwt, enrichment):
     Interpolate OpenMC results for a given (reactor_type, power_mwt, enrichment).
 
     - Mass U235 / Mass U238 depend only on enrichment → 1-D linear interpolation.
-    - Fuel Lifetime depends on both enrichment and power → 2-D linear interpolation
-      over the triangulated convex hull of available data points, with a
-      nearest-neighbour fallback for points outside that hull.
+    - Fuel Lifetime depends on both enrichment and power → bilinear interpolation:
+        1. Find the two bracketing enrichment levels in the data.
+        2. At each enrichment level, linearly interpolate in power.
+        3. Linearly interpolate the two results in enrichment.
+      This ensures that if both bracketing power values at a given enrichment are
+      zero, the result is also zero — avoiding the spurious non-zero values that
+      unstructured triangulation (griddata) can produce across zero-lifetime regions.
     - Fuel Lifetime is clamped to >= 0.
 
     Returns a dict with keys 'Fuel Lifetime', 'Mass U235', 'Mass U238'.
     Raises SubcriticalError if Fuel Lifetime == 0.
     """
-    from scipy.interpolate import griddata
-
     df = _load_lookup()
     rdf = df[df['reactor type'] == reactor_type].copy()
 
@@ -98,15 +100,29 @@ def interpolate_openmc_results(reactor_type, power_mwt, enrichment):
     mass_u235 = float(np.interp(enrichment, enr_unique, u235_vals))
     mass_u238 = float(np.interp(enrichment, enr_unique, u238_vals))
 
-    # --- 2-D interpolation for fuel lifetime (enrichment × power) ---
-    points = rdf[['Enrichment', 'Power MWt']].values
-    fl_vals = rdf['Fuel Lifetime'].values.astype(float)
-    query = np.array([[enrichment, power_mwt]])
+    # --- Bilinear interpolation for fuel lifetime (enrichment × power) ---
+    def _fl_at_enr(enr):
+        """1-D linear interpolation of Fuel Lifetime in power at a fixed enrichment."""
+        sub = rdf[rdf['Enrichment'] == enr].sort_values('Power MWt')
+        return float(np.interp(power_mwt,
+                               sub['Power MWt'].values.astype(float),
+                               sub['Fuel Lifetime'].values.astype(float)))
 
-    fl = griddata(points, fl_vals, query, method='linear')[0]
-    if np.isnan(fl):
-        # Outside the convex hull — nearest-neighbour fallback
-        fl = griddata(points, fl_vals, query, method='nearest')[0]
+    idx = int(np.searchsorted(enr_unique, enrichment))
+
+    if idx == 0:
+        # At or below minimum enrichment — clamp
+        fl = _fl_at_enr(enr_unique[0])
+    elif idx >= len(enr_unique):
+        # At or above maximum enrichment — clamp
+        fl = _fl_at_enr(enr_unique[-1])
+    else:
+        enr_lo, enr_hi = enr_unique[idx - 1], enr_unique[idx]
+        fl_lo = _fl_at_enr(enr_lo)
+        fl_hi = _fl_at_enr(enr_hi)
+        t = (enrichment - enr_lo) / (enr_hi - enr_lo)
+        fl = fl_lo + t * (fl_hi - fl_lo)
+
     fl = max(0.0, float(fl))
 
     return {
