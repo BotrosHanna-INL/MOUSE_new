@@ -1,4 +1,5 @@
-# Copyright 2025, Battelle Energy Alliance, LLC, ALL RIGHTS RESERVED
+# Copyright 2025 Battelle Energy Alliance, LLC
+# Released under the MIT License.
 """
 MOUSE Streamlit Web App
 Microreactor Online Unified Simulation Engine — cost estimation without OpenMC.
@@ -996,6 +997,15 @@ with streamlit_analytics.track():
         )
 
         st.info('Configure your reactor in the sidebar, then click **⚡ Run Cost Estimate** to begin.')
+
+        st.markdown(
+            """
+            <div style='text-align: center; font-size: 0.9rem; color: gray; padding-top: 2rem; padding-bottom: 1rem;'>
+                © 2025 Battelle Energy Alliance, LLC. MOUSE is released under the MIT License.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.stop()
 
     # ── Run cost estimate ───────────────────────────────────────────────────
@@ -1016,11 +1026,29 @@ with streamlit_analytics.track():
             _info_card(cc, 'Enrichment',    f'{enrichment*100:.2f}%', accent='#9a3412', bg='#fff7ed', border='#fed7aa')
             st.info('No cost estimate is available for a subcritical operating point. '
                     'Try reducing the power or increasing the enrichment.')
+
+            st.markdown(
+                """
+                <div style='text-align: center; font-size: 0.9rem; color: gray; padding-top: 2rem; padding-bottom: 1rem;'>
+                    © 2025 Battelle Energy Alliance, LLC. MOUSE is released under the MIT License.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             st.stop()
         except Exception as exc:
             st.error(f'Cost estimation failed: {exc}')
             import traceback
             st.code(traceback.format_exc())
+
+            st.markdown(
+                """
+                <div style='text-align: center; font-size: 0.9rem; color: gray; padding-top: 2rem; padding-bottom: 1rem;'>
+                    © 2025 Battelle Energy Alliance, LLC. MOUSE is released under the MIT License.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             st.stop()
 
     # ── Extract key params ──────────────────────────────────────────────────
@@ -1454,3 +1482,12 @@ with streamlit_analytics.track():
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             use_container_width=True,
         )
+
+    st.markdown(
+        """
+        <div style='text-align: center; font-size: 0.9rem; color: gray; padding-top: 2rem; padding-bottom: 1rem;'>
+            © 2025 Battelle Energy Alliance, LLC. MOUSE is released under the MIT License.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
