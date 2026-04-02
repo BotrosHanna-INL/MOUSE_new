@@ -221,7 +221,7 @@ _REACTOR_IMAGES = {
 def _run_estimate(reactor_type, power_mwt, enrichment, interest_rate, discount_rate,
                   construction_duration, debt_to_equity, operation_mode,
                   emergency_shutdowns, startup_duration, startup_duration_refueling,
-                  tax_credit_type, tax_credit_value):
+                  tax_credit_type, tax_credit_value, plant_lifetime):
     overrides = {
         'Interest Rate': interest_rate,
         'Discount Rate': discount_rate,
@@ -232,6 +232,7 @@ def _run_estimate(reactor_type, power_mwt, enrichment, interest_rate, discount_r
         'Emergency Shutdowns Per Year': emergency_shutdowns,
         'Startup Duration after Emergency Shutdown': startup_duration,
         'Startup Duration after Refueling': startup_duration_refueling,
+        'Levelization Period': plant_lifetime,
     }
     if tax_credit_type == 'PTC':
         overrides['PTC credit value'] = tax_credit_value
@@ -636,7 +637,7 @@ with st.sidebar:
         help=(
             'Annual discount rate (Weighted Average Cost of Capital, WACC) — reflects the '
             'opportunity cost of capital and the time value of money. Used for LCOE/LCOH '
-            'levelization and cost annualization. Should be ≥ interest rate. '
+            'levelization and cost annualization. Should be >= interest rate. '
             'Typical range: 3–15%. Government/public projects: 3–7%; private nuclear: 8–15%.'
         ),
     )
@@ -649,6 +650,15 @@ with st.sidebar:
         'Debt-to-Equity Ratio',
         min_value=0.0, max_value=5.0, value=1.0, step=0.1, format='%.1f',
         help='Ratio of debt to equity financing (e.g. 1.0 = equal debt and equity).',
+    )
+    plant_lifetime = st.number_input(
+        'Plant Lifetime (years)',
+        min_value=10, max_value=100, value=60, step=1,
+        help=(
+            'Economic lifetime of the plant used to levelize costs over time. '
+            'A longer lifetime spreads capital costs over more years, reducing LCOE. '
+            'Minimum: 10 years. Maximum: 100 years.'
+        ),
     )
 
     st.markdown('**Government Subsidy (IRA Tax Credits)**')
@@ -800,7 +810,7 @@ with st.spinner('Running cost estimate…'):
             reactor_type, power_mwt, enrichment,
             interest_rate / 100.0, discount_rate / 100.0, construction_duration, debt_to_equity,
             operation_mode, emergency_shutdowns, startup_duration, startup_duration_refueling,
-            tax_credit_type, tax_credit_value,
+            tax_credit_type, tax_credit_value, plant_lifetime,
         )
     except SubcriticalError as exc:
         st.error('### ⚠ Reactor is Subcritical')
@@ -1018,12 +1028,12 @@ with tab_drivers:
     _drv = _drv.head(10)
 
     if _drv.empty:
-        st.info('No accounts with FOAK LCOE ≥ 5 $/MWh found.')
+        st.info('No accounts with FOAK LCOE >= 5 $/MWh found.')
     else:
         st.markdown(
             '<p style="color:#64748b;font-size:0.85rem;margin-bottom:1rem;">'
             'Per-account LCOE contributions ($/MWh) sorted by FOAK impact. '
-            'Error bars show ±1 standard deviation across Monte Carlo samples.</p>',
+            'Error bars show +/-1 standard deviation across Monte Carlo samples.</p>',
             unsafe_allow_html=True,
         )
 
@@ -1194,8 +1204,8 @@ with tab_table:
     _idx_to_pos  = {idx: pos for pos, idx in enumerate(table_df.index)}
 
     _EM = '\u2003'
-    _PREFIX = {'-': '', 0: '', 1: f'{_EM}› ', 2: f'{_EM}{_EM}› ',
-               3: f'{_EM}{_EM}{_EM}· ', 4: f'{_EM}{_EM}{_EM}{_EM}· '}
+    _PREFIX = {'-': '', 0: '', 1: f'{_EM}> ', 2: f'{_EM}{_EM}> ',
+               3: f'{_EM}{_EM}{_EM}. ', 4: f'{_EM}{_EM}{_EM}{_EM}. '}
     table_df['Account Title'] = [
         f"{_PREFIX.get(lv, _EM * 4)}{title}"
         for lv, title in zip(_acct_levels, display_df['Account Title'])
@@ -1254,6 +1264,6 @@ with tab_table:
         label='⬇  Download Full Excel',
         data=buffer.getvalue(),
         file_name=f'MOUSE_cost_estimate_{reactor_type}.xlsx',
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.request',
         use_container_width=True,
     )
