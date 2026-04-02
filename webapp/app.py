@@ -94,7 +94,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import streamlit as st
 import streamlit_analytics2 as streamlit_analytics
-from streamlit_cookies_manager import EncryptedCookieManager
+from st_cookies_manager import EncryptedCookieManager
 
 from reactor_config import build_params, SubcriticalError, ESCALATION_YEAR
 from cost.cost_estimation import bottom_up_cost_estimate, transform_dataframe
