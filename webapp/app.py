@@ -468,10 +468,10 @@ def _fmt_lcoe(mean, std):
         return 'N/A'
     m = int(round(mean))
     if math.isnan(std) or std == 0:
-        return f'${m}/MWh'
+        return f'${m}/MW<sub>e</sub>h'
     lo = int(round(mean - std))
     hi = int(round(mean + std))
-    return f'${lo} – ${hi}/MWh'
+    return f'${lo} – ${hi}/MW<sub>e</sub>h'
 
 
 def _fmt_lcoh(mean, std):
@@ -479,10 +479,10 @@ def _fmt_lcoh(mean, std):
         return 'N/A'
     m = int(round(mean))
     if math.isnan(std) or std == 0:
-        return f'${m}/MW<sub>th</sub>'
+        return f'${m}/MW<sub>t</sub>h'
     lo = int(round(mean - std))
     hi = int(round(mean + std))
-    return f'${lo} – ${hi}/MW<sub>th</sub>'
+    return f'${lo} – ${hi}/MW<sub>t</sub>h'
 
 
 def _get_lcof(df, which='FOAK'):
@@ -1022,7 +1022,7 @@ with streamlit_analytics.track():
             st.warning(str(exc))
             ca, cb, cc = st.columns(3)
             _info_card(ca, 'Fuel Lifetime', '0 days', accent='#dc2626', bg='#fef2f2', border='#fecaca')
-            _info_card(cb, 'Thermal Power', f'{power_mwt} MWt',  accent='#9a3412', bg='#fff7ed', border='#fed7aa')
+            _info_card(cb, 'Thermal Power', f'{power_mwt} MW<sub>t</sub>',  accent='#9a3412', bg='#fff7ed', border='#fed7aa')
             _info_card(cc, 'Enrichment',    f'{enrichment*100:.2f}%', accent='#9a3412', bg='#fff7ed', border='#fed7aa')
             st.info('No cost estimate is available for a subcritical operating point. '
                     'Try reducing the power or increasing the enrichment.')
@@ -1209,13 +1209,13 @@ with streamlit_analytics.track():
                 unsafe_allow_html=True,
             )
             lc1, lc2, lc3 = st.columns(3)
-            _kpi_card(lc1, 'LCOE ($/MWh)',
+            _kpi_card(lc1, 'LCOE ($/MW<sub>e</sub>h)',
                       _fmt_lcoe(lcoe_f, lcoe_f_std), _fmt_lcoe(lcoe_n, lcoe_n_std),
                       color=_CARD_COLORS['lcoe'])
-            _kpi_card(lc2, 'LCOH ($/MW<sub>th</sub>)',
+            _kpi_card(lc2, 'LCOH ($/MW<sub>t</sub>h)',
                       _fmt_lcoh(lcoh_f, lcoh_f_std), _fmt_lcoh(lcoh_n, lcoh_n_std),
                       color=_CARD_COLORS['lcoh'])
-            _kpi_card(lc3, 'LCOF — Fuel Only ($/MWh)',
+            _kpi_card(lc3, 'LCOF — Fuel Only ($/MW<sub>e</sub>h)',
                       _fmt_lcoe(lcof_f, lcof_f_std), _fmt_lcoe(lcof_n, lcof_n_std),
                       color=_CARD_COLORS['lcof'])
 
