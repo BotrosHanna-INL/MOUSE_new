@@ -537,7 +537,7 @@ st.markdown(f'<style>{_CSS}</style>', unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # Google Analytics 4
 # ---------------------------------------------------------------------------
-st.components.v1.html(
+st.markdown(
     """
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-KJZ7JEGC23"></script>
     <script>
@@ -547,7 +547,7 @@ st.components.v1.html(
       gtag('config', 'G-KJZ7JEGC23');
     </script>
     """,
-    height=0,
+    unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------------------------
