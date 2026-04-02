@@ -479,10 +479,10 @@ def _fmt_lcoh(mean, std):
         return 'N/A'
     m = int(round(mean))
     if math.isnan(std) or std == 0:
-        return f'${m}/MWth'
+        return f'${m}/MW<sub>th</sub>'
     lo = int(round(mean - std))
     hi = int(round(mean + std))
-    return f'${lo} – ${hi}/MWth'
+    return f'${lo} – ${hi}/MW<sub>th</sub>'
 
 
 def _get_lcof(df, which='FOAK'):
@@ -1180,8 +1180,8 @@ with streamlit_analytics.track():
 
         with info_col:
             ic1, ic2, ic3 = st.columns(3)
-            _info_card(ic1, 'Electric Power Output', f'{power_mwe:.1f} MWe',
-                       subtitle=f'Thermal input: {power_mwt} MWt')
+            _info_card(ic1, 'Electric Power Output', f'{power_mwe:.1f} MW<sub>e</sub>',
+                       subtitle=f'Thermal input: {power_mwt} MW<sub>t</sub>')
             _info_card(ic2, 'Fuel Lifetime', _fl_str, subtitle=_fl_days)
             _info_card(ic3, 'Capacity Factor', _cf_str,
                        subtitle='Accounts for refueling & shutdowns')
@@ -1212,7 +1212,7 @@ with streamlit_analytics.track():
             _kpi_card(lc1, 'LCOE ($/MWh)',
                       _fmt_lcoe(lcoe_f, lcoe_f_std), _fmt_lcoe(lcoe_n, lcoe_n_std),
                       color=_CARD_COLORS['lcoe'])
-            _kpi_card(lc2, 'LCOH ($/MWth)',
+            _kpi_card(lc2, 'LCOH ($/MW<sub>th</sub>)',
                       _fmt_lcoh(lcoh_f, lcoh_f_std), _fmt_lcoh(lcoh_n, lcoh_n_std),
                       color=_CARD_COLORS['lcoh'])
             _kpi_card(lc3, 'LCOF — Fuel Only ($/MWh)',
@@ -1388,8 +1388,8 @@ with streamlit_analytics.track():
 
         _sf = display_df[_foak_std] if _foak_std else pd.Series('-', index=display_df.index)
         _sn = display_df[_noak_std] if _noak_std else pd.Series('-', index=display_df.index)
-        table_df['FOAK Cost'] = [_pm(m, s) for m, s in zip(display_df[_foak_col], _sf)]
-        table_df['NOAK Cost'] = [_pm(m, s) for m, s in zip(display_df[_noak_col], _sn)]
+        table_df['FOAK Cost ($)'] = [_pm(m, s) for m, s in zip(display_df[_foak_col], _sf)]
+        table_df['NOAK Cost ($)'] = [_pm(m, s) for m, s in zip(display_df[_noak_col], _sn)]
 
         if _have_lcoe:
             _ei   = display_df.index
@@ -1457,8 +1457,8 @@ with streamlit_analytics.track():
         _col_cfg = {
             'Account':       st.column_config.TextColumn(width='small'),
             'Account Title': st.column_config.TextColumn(width='medium'),
-            'FOAK Cost':     st.column_config.TextColumn(width='small'),
-            'NOAK Cost':     st.column_config.TextColumn(width='small'),
+            'FOAK Cost ($)': st.column_config.TextColumn(width='small'),
+            'NOAK Cost ($)': st.column_config.TextColumn(width='small'),
         }
         if _have_lcoe:
             _col_cfg['FOAK LCOE ($/MWh)'] = st.column_config.TextColumn(width='small')
