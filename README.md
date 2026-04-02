@@ -52,3 +52,32 @@ python -m examples.watts_exec_GCMR_Design_A
 python -m examples.watts_exec_HPMR
 ```
 Examples of the results are [here](./assets/Ref_Results)
+
+## Relevant Publications
+
+### Foundational Reports and Papers
+
+**[Technoeconomic Evaluation of Microreactor Using Detailed Bottom-up Estimate (Rev. 1)](https://www.osti.gov/biblio/2447366)**
+Hanna et al., INL Technical Report, 2024. Develops the transparent bottom-up cost methodology using the MARVEL microreactor as reference — the direct precursor to MOUSE's economic framework.
+
+---
+
+**[A Bottom-Up Cost Estimation Tool for Nuclear Microreactors](https://www.osti.gov/biblio/2588465)**
+Hanna et al., INL S&T Accomplishment Report, 2025. Describes the MOUSE tool, its architecture, and demonstrates FOAK/NOAK cost estimates and parametric studies for the LTMR, GCMR, and HPMR designs.
+
+---
+
+**[Open-Source Microreactor Design Models for Technoeconomic Assessments](https://www.sciencedirect.com/science/article/pii/S0029549325003875)**
+Al-Dawood, Hanna et al., Nuclear Engineering and Design, 2025. Documents the cost correlations, design parameters, and bottom-up assumptions for the LTMR and GCMR models embedded in MOUSE.
+
+---
+
+### Applications and Extensions
+
+**[Techno-Economic Optimization of a Heat-Pipe Microreactor, Part I: Theory and Cost Optimization](https://arxiv.org/pdf/2512.16032)**
+Seurin, Price, Nunez — INL/MIT, 2025. Couples MOUSE's LCOE estimation with surrogate modeling and reinforcement learning to optimize HPMR geometry under physics constraints.
+
+---
+
+**[Techno-Economic Optimization of a Heat-Pipe Microreactor, Part II: Multi-Objective Optimization Analysis](https://arxiv.org/pdf/2601.20079)**
+Seurin, Price — INL/MIT, 2026. Extends Part I to multi-objective optimization of LCOE and rod-integrated peaking factor using the PEARL algorithm, with MOUSE as the cost engine.
