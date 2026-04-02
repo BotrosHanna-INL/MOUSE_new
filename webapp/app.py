@@ -80,7 +80,12 @@ sys.modules['watts'] = MagicMock()
 # ---------------------------------------------------------------------------
 import io
 import math
+import sqlite3
+import uuid
 import warnings
+from datetime import datetime, timezone
+from pathlib import Path
+
 warnings.filterwarnings('ignore')
 
 import numpy as np
@@ -89,6 +94,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import streamlit as st
 import streamlit_analytics2 as streamlit_analytics
+from streamlit_cookies_manager import EncryptedCookieManager
 
 from reactor_config import build_params, SubcriticalError, ESCALATION_YEAR
 from cost.cost_estimation import bottom_up_cost_estimate, transform_dataframe
@@ -247,6 +253,181 @@ def _run_estimate(reactor_type, power_mwt, enrichment, interest_rate, discount_r
     enriched_df = cost_drivers_estimate(raw_df, p)
     return transform_dataframe(enriched_df), enriched_df, p
 
+
+# ---------------------------------------------------------------------------
+# Anonymous visitor analytics
+# ---------------------------------------------------------------------------
+_ANALYTICS_DB_PATH = Path(_repo_root) / 'webapp' / 'analytics.db'
+_ANALYTICS_COOKIE_NAME = 'anonymous_id'
+
+
+def _get_cookie_manager():
+    return EncryptedCookieManager(
+        prefix='mouse_',
+        password=st.secrets.get('COOKIE_PASSWORD', 'change-this-in-streamlit-secrets'),
+    )
+
+
+def _get_analytics_conn():
+    conn = sqlite3.connect(_ANALYTICS_DB_PATH, check_same_thread=False)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS visits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            anonymous_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            first_seen_utc TEXT NOT NULL,
+            visit_time_utc TEXT NOT NULL,
+            page_name TEXT,
+            reactor_type TEXT,
+            user_agent TEXT,
+            language TEXT
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+def _get_or_create_anonymous_id(cookies):
+    anonymous_id = cookies.get(_ANALYTICS_COOKIE_NAME)
+    if not anonymous_id:
+        anonymous_id = str(uuid.uuid4())
+        cookies[_ANALYTICS_COOKIE_NAME] = anonymous_id
+        cookies.save()
+    return anonymous_id
+
+
+def _get_first_seen(conn, anonymous_id, now_utc):
+    row = conn.execute(
+        "SELECT MIN(first_seen_utc) FROM visits WHERE anonymous_id = ?",
+        (anonymous_id,),
+    ).fetchone()
+    return row[0] if row and row[0] else now_utc
+
+
+def _log_visit_once_per_session(conn, anonymous_id, reactor_type=None, page_name='main'):
+    if 'analytics_session_id' not in st.session_state:
+        st.session_state.analytics_session_id = str(uuid.uuid4())
+
+    if 'analytics_visit_logged' not in st.session_state:
+        st.session_state.analytics_visit_logged = False
+
+    if st.session_state.analytics_visit_logged:
+        return
+
+    headers = dict(st.context.headers) if hasattr(st.context, 'headers') else {}
+    user_agent = headers.get('User-Agent', '')
+    language = headers.get('Accept-Language', '')
+    now_utc = datetime.now(timezone.utc).isoformat()
+    first_seen_utc = _get_first_seen(conn, anonymous_id, now_utc)
+
+    conn.execute(
+        """
+        INSERT INTO visits (
+            anonymous_id,
+            session_id,
+            first_seen_utc,
+            visit_time_utc,
+            page_name,
+            reactor_type,
+            user_agent,
+            language
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            anonymous_id,
+            st.session_state.analytics_session_id,
+            first_seen_utc,
+            now_utc,
+            page_name,
+            reactor_type,
+            user_agent,
+            language,
+        ),
+    )
+    conn.commit()
+    st.session_state.analytics_visit_logged = True
+
+
+def _get_analytics_summary(conn):
+    total_visits = conn.execute("SELECT COUNT(*) FROM visits").fetchone()[0]
+    unique_visitors = conn.execute(
+        "SELECT COUNT(DISTINCT anonymous_id) FROM visits"
+    ).fetchone()[0]
+    returning_visitors = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM (
+            SELECT anonymous_id
+            FROM visits
+            GROUP BY anonymous_id
+            HAVING COUNT(*) > 1
+        )
+        """
+    ).fetchone()[0]
+
+    visits_per_person = pd.read_sql_query(
+        """
+        SELECT
+            anonymous_id,
+            COUNT(*) AS visit_count,
+            MIN(first_seen_utc) AS first_seen_utc,
+            MAX(visit_time_utc) AS last_visit_utc,
+            MAX(COALESCE(reactor_type, '')) AS last_reactor_type
+        FROM visits
+        GROUP BY anonymous_id
+        ORDER BY last_visit_utc DESC
+        """,
+        conn,
+    )
+
+    recent_visits = pd.read_sql_query(
+        """
+        SELECT
+            anonymous_id,
+            visit_time_utc,
+            reactor_type,
+            page_name
+        FROM visits
+        ORDER BY visit_time_utc DESC
+        LIMIT 25
+        """,
+        conn,
+    )
+
+    return total_visits, unique_visitors, returning_visitors, visits_per_person, recent_visits
+
+
+def _render_analytics_sidebar(conn):
+    total_visits, unique_visitors, returning_visitors, visits_per_person, recent_visits = _get_analytics_summary(conn)
+
+    with st.sidebar.expander('📈 Anonymous Visitor Analytics'):
+        c1, c2 = st.columns(2)
+        c1.metric('Total visits', total_visits)
+        c2.metric('Unique visitors', unique_visitors)
+
+        c3, c4 = st.columns(2)
+        c3.metric('Returning', returning_visitors)
+        c4.metric(
+            'Avg visits/user',
+            f"{(total_visits / unique_visitors):.2f}" if unique_visitors else '0.00'
+        )
+
+        st.caption('Visits per anonymous visitor')
+        st.dataframe(
+            visits_per_person,
+            use_container_width=True,
+            hide_index=True,
+            height=220,
+        )
+
+        st.caption('Most recent visits')
+        st.dataframe(
+            recent_visits,
+            use_container_width=True,
+            hide_index=True,
+            height=220,
+        )
 
 # ---------------------------------------------------------------------------
 # Formatting helpers
@@ -534,6 +715,13 @@ st.set_page_config(
     layout='wide',
 )
 
+cookies = _get_cookie_manager()
+if not cookies.ready():
+    st.stop()
+
+analytics_conn = _get_analytics_conn()
+anonymous_id = _get_or_create_anonymous_id(cookies)
+
 # ---------------------------------------------------------------------------
 # Main app — wrapped in analytics tracker
 # ---------------------------------------------------------------------------
@@ -566,6 +754,8 @@ with streamlit_analytics.track():
             help='Select a microreactor design to estimate costs for.',
         )
         reactor_type = _LABEL_TO_KEY[reactor_label]
+
+        _log_visit_once_per_session(analytics_conn, anonymous_id, reactor_type=reactor_type, page_name='main')
 
         enrichment = st.slider(
             'Enrichment (U-235 fraction)',
@@ -702,6 +892,9 @@ with streamlit_analytics.track():
             'https://qualtricsxm69xy9s7vm.qualtrics.com/jfe/form/SV_4Pb0vub9xCcsVV4',
             use_container_width=True,
         )
+
+        st.divider()
+        _render_analytics_sidebar(analytics_conn)
 
     # ── Welcome banner ──────────────────────────────────────────────────────
     if not run_button:
@@ -1257,6 +1450,6 @@ with streamlit_analytics.track():
             label='⬇  Download Full Excel',
             data=buffer.getvalue(),
             file_name=f'MOUSE_cost_estimate_{reactor_type}.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.request',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             use_container_width=True,
         )

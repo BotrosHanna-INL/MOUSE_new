@@ -5,3 +5,4 @@ scipy
 openpyxl
 matplotlib
 streamlit-analytics2
+st-cookies-manager
