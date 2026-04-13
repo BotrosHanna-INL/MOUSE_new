@@ -50,7 +50,7 @@ update_params({
     'Axial Reflector': 'Graphite',
     'Matrix Material': 'Graphite', # matrix material is a background material within the compact fuel element between the TRISO particles
     'Moderator': 'Graphite', # The moderator is outside this compact fuel region 
-    'Moderator Booster': 'ZrH',
+    'Moderator Booster Materials': ['ZrH'],
     'Coolant': 'Helium',
     'Common Temperature': 850,  # Kelvins
     'Control Drum Absorber': 'B4C_enriched',  # The absorber material in the control drums
@@ -67,7 +67,7 @@ for params['Packing Fraction'] in np.linspace(0.25, 0.35, 2):
         'Fuel Pin Radii': [0.025, 0.035, 0.039, 0.0425, 0.047],  # cm
         'Compact Fuel Radius': 0.6225,  # cm
         'Coolant Channel Radius': 0.35,  # cm
-        'Moderator Booster Radius': 0.55, # cm
+        'Moderator Booster Radii': [0.55],  # cm
         'Lattice Pitch': 2.25,
         'Assembly Rings': 6,
         'Core Rings': 5,

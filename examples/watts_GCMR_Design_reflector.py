@@ -52,7 +52,7 @@ for params['Radial Reflector'] in ['Graphite', 'BeO']:
             'UO2 atom fraction': 0.7,  # Mixing UO2 and UC by atom fraction
             'Matrix Material': 'Graphite', # matrix material is a background material within the compact fuel element between the TRISO particles
             'Moderator': 'Graphite', # The moderator is outside this compact fuel region 
-            'Moderator Booster': 'ZrH',
+            'Moderator Booster Materials': ['ZrH'],
             'Coolant': 'Helium',
             'Common Temperature': 850,  # Kelvins
             'Control Drum Absorber': 'B4C_enriched',  # The absorber material in the control drums
@@ -70,7 +70,7 @@ for params['Radial Reflector'] in ['Graphite', 'BeO']:
             'Compact Fuel Radius': 0.6225,  # cm
             'Packing Fraction': 0.3,
             'Coolant Channel Radius': 0.35,  # cm
-            'Moderator Booster Radius': 0.55, # cm
+            'Moderator Booster Radii': [0.55],  # cm
             'Lattice Pitch': 2.25,
             'Assembly Rings': 6,
             'Core Rings': 5,
