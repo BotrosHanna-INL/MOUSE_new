@@ -299,7 +299,7 @@ for params['Packing Fraction'] in np.linspace(0.25, 0.35, 2):
                            "Total Number of TRISO Particles", "Core Radius", "Heat Flux", "Fuel Lifetime",
                            "Mass U235", "Mass U238", "Uranium Mass", "Max Peaking Factor"]
 
-    parametric_studies('cost/Cost_Database.xlsx', params, tracked_params_list, 'examples/output_parametric_CGMR_packing_fraction.csv')
+    parametric_studies('cost/Cost_Database.xlsx', tracked_params_list)
 
     elapsed_time = (time.time() - time_start) / 60
     print('Execution time:', np.round(elapsed_time, 2), 'minutes')

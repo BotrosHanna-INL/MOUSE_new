@@ -300,7 +300,7 @@ for params['Radial Reflector'] in ['Graphite', 'BeO']:
         # FIXED: 'Reflector' renamed to 'Radial Reflector' to match updated params key
         tracked_params_list = ["Radial Reflector", "Reflector Thickness", "Core Radius", "Heat Flux", "Fuel Lifetime", "Max Peaking Factor"]
         
-        parametric_studies('cost/Cost_Database.xlsx', params, tracked_params_list, 'examples/output_parametric_CGMR_design_reflector.csv')
+        parametric_studies('cost/Cost_Database.xlsx', tracked_params_list)
         
         elapsed_time = (time.time() - time_start) / 60
         print('Execution time:', np.round(elapsed_time, 2), 'minutes')

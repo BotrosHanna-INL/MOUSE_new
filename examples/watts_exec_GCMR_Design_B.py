@@ -302,6 +302,6 @@ update_params({
 #                                           Sec. 11: Post Processing
 # **************************************************************************************************************************
 params['Number of Samples'] = 1 # Accounting for cost uncertainties
-estimate = detailed_bottom_up_cost_estimate('./cost/Cost_Database.xlsx', params, "examples/output_GCMR_B.xlsx")
+estimate = detailed_bottom_up_cost_estimate('cost/Cost_Database.xlsx')
 elapsed_time = (time.time() - time_start) / 60
 print('Execution time:', np.round(elapsed_time, 1), 'minutes')
