@@ -65,7 +65,7 @@ update_params({
     # Two concentric regions, listed from innermost to outermost.
     # Each entry in 'Moderator Booster Materials' corresponds to the same-index entry in 'Moderator Booster Radii'.
     # The outermost radius (0.55 cm) matches the single-region Design A baseline.
-    'Moderator Booster Materials': ['ZrH', 'Graphite'],  # inner ZrH core, outer Graphite shell
+    'Moderator Booster Materials': ['Graphite', 'ZrH'],  # inner ZrH core, outer Graphite shell
     # --------------------------------
 
     'Coolant': 'Helium',
