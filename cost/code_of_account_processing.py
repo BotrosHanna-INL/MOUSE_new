@@ -56,7 +56,7 @@ def find_children_accounts(df):
                 children = []
                 for j in range(i + 1, len(df)):
                     if df.iloc[j]['Level'] == source_level:
-                        children.append(str(df.iloc[j]['Account']))  # Convert to string
+                        children.append(str(df.index[j]))  # Store pandas row index (unique even when account numbers repeat)
                     elif df.iloc[j]['Level'] < source_level:
                         break
                 # Convert the list to a comma-separated string
