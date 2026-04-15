@@ -3,13 +3,11 @@
 """
 This script demonstrates the multi-region moderator booster feature for the GCMR.
 
-The booster pin is composed of two concentric cylindrical regions:
-  - Inner region (r = 0 to 0.40 cm): ZrH  — high hydrogen density for neutron moderation
-  - Outer region (r = 0.40 to 0.55 cm): Graphite — lower-cost outer shell
+The booster pin is composed of two concentric cylindrical regions
+  - Inner region (r = 0 to 0.40 cm): 
+  - Outer region (r = 0.40 to 0.55 cm): 
 
-Both materials are fetched from the materials database (densities are never hardcoded).
-The total pin outer radius (0.55 cm) is identical to the single-material Design A baseline,
-so the overall hex assembly geometry is unchanged.
+Both materials are fetched from the materials database.
 
 Mass is calculated per material (params['Moderator Booster Mass ZrH'] and
 params['Moderator Booster Mass Graphite']) and summed into params['Moderator Booster Mass'].
@@ -65,7 +63,7 @@ update_params({
     # Two concentric regions, listed from innermost to outermost.
     # Each entry in 'Moderator Booster Materials' corresponds to the same-index entry in 'Moderator Booster Radii'.
     # The outermost radius (0.55 cm) matches the single-region Design A baseline.
-    'Moderator Booster Materials': ['Graphite', 'ZrH'],  # inner ZrH core, outer Graphite shell
+    'Moderator Booster Materials': ['Graphite', 'ZrH'],  
     # --------------------------------
 
     'Coolant': 'Helium',
