@@ -306,7 +306,7 @@ for params['variable_cost_1'] in [0, 1000, 5000, 10000]:
     # **************************************************************************************************************************
     params['Number of Samples'] = 100
     tracked_params_list = ["variable_cost_1", 'variable_cost_1_low', 'variable_cost_1_high']
-    parametric_studies('examples/variable_input_Cost_Database.xlsx', params, tracked_params_list, 'examples/output_parametric_YHx_cost.csv')
+    parametric_studies('examples/variable_input_Cost_Database.xlsx', tracked_params_list)
 
     elapsed_time = (time.time() - time_start) / 60
     print('Execution time:', np.round(elapsed_time, 2), 'minutes')

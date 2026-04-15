@@ -119,10 +119,10 @@ PARAMS_REGISTRY = {
         'description': 'Neutron moderator material type (e.g. ZrH, Graphite, monolith_graphite)',
         'source': 'User Input', 'hidden': False, 'array_mode': None},
 
-    'Moderator Booster': {
+    'Moderator Booster Materials': {
         'group': 'Materials', 'units': '',
-        'description': 'Moderator booster material type used in GCMR assemblies (e.g. ZrH)',
-        'source': 'User Input', 'hidden': False, 'array_mode': None},
+        'description': 'List of moderator booster material names, from innermost to outermost region (e.g. [\'ZrH\'] or [\'ZrH\', \'Graphite\'])',
+        'source': 'User Input', 'hidden': False, 'array_mode': 'list'},
 
     'Matrix Material': {
         'group': 'Materials', 'units': '',
@@ -247,10 +247,10 @@ PARAMS_REGISTRY = {
         'description': 'Radius of the coolant channels in the GCMR assembly',
         'source': 'User Input', 'hidden': False, 'array_mode': None},
 
-    'Moderator Booster Radius': {
+    'Moderator Booster Radii': {
         'group': 'Geometry', 'units': 'cm',
-        'description': 'Radius of the moderator booster pins in the GCMR assembly',
-        'source': 'User Input', 'hidden': False, 'array_mode': None},
+        'description': 'List of cumulative outer radii for moderator booster pin regions, innermost first (e.g. [0.55] or [0.40, 0.55])',
+        'source': 'User Input', 'hidden': False, 'array_mode': 'list'},
 
     'Lattice Pitch': {
         'group': 'Geometry', 'units': 'cm',

@@ -404,24 +404,51 @@ def bottom_up_cost_estimate_central(cost_database_filename, params):
     return reordered_df
 
 
-def parametric_studies(cost_database_filename, params, tracked_params_list, output_csv_filename):
+def parametric_studies(cost_database_filename, tracked_params_list):
+    import inspect
+
+    # Grab params and the calling script's path from the caller's frame automatically
+    caller_frame = inspect.stack()[1][0]
+    params = caller_frame.f_locals.get('params')
+    if params is None:
+        raise RuntimeError(
+            "parametric_studies could not find 'params' in the calling scope. "
+            "Make sure a variable named 'params' exists in the script that calls this function."
+        )
+    caller_file = caller_frame.f_globals.get('__file__', 'output')
+    output_csv_filename = os.path.splitext(os.path.abspath(caller_file))[0] + '_output.csv'
+
     detatiled_cost_table = bottom_up_cost_estimate(cost_database_filename, params)
     tracked_costs = create_cost_dictionary(detatiled_cost_table, params, tracked_params_list)
-    
+
     file_exists = os.path.isfile(output_csv_filename)
-    
+
     with open(output_csv_filename, 'a', newline='') as csvfile:
         fieldnames = tracked_costs.keys()
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        
+
         if not file_exists or os.stat(output_csv_filename).st_size == 0:
             writer.writeheader()
-        
+
         writer.writerow(tracked_costs)
         print(f"Results are being saved on {output_csv_filename}")
 
 
-def detailed_bottom_up_cost_estimate(cost_database_filename, params, output_filename):
+def detailed_bottom_up_cost_estimate(cost_database_filename):
+    import inspect
+    import os
+
+    # Grab params and the calling script's path from the caller's frame automatically
+    caller_frame = inspect.stack()[1][0]
+    params = caller_frame.f_locals.get('params')
+    if params is None:
+        raise RuntimeError(
+            "detailed_bottom_up_cost_estimate could not find 'params' in the calling scope. "
+            "Make sure a variable named 'params' exists in the script that calls this function."
+        )
+    caller_file = caller_frame.f_globals.get('__file__', 'output')
+    output_filename = os.path.splitext(os.path.abspath(caller_file))[0] + '_output.xlsx'
+
     detailed_cost_table = bottom_up_cost_estimate(cost_database_filename, params)
     detailed_central_cost_table = bottom_up_cost_estimate_central(cost_database_filename, params)
     pretty_df = transform_dataframe(detailed_cost_table)

@@ -66,7 +66,7 @@ def collect_materials_data(params):
         UC = openmc.Material(name='UC')
         UC.set_density('g/cm3', 13.0)
         UC.add_element('U', 1.0, enrichment=100 * params['Enrichment'])
-        UC.add_element('N', 1.0)
+        UC.add_element('C', 1.0)
         materials.append(UC)
         materials_database.update({'UC': UC})
     except KeyError as e:
@@ -247,7 +247,7 @@ def collect_materials_data(params):
 
     # Enriched B4C
     B4C_enriched = openmc.Material(name="B4C_enriched", temperature=params['Common Temperature'])
-    B4C_enriched.add_element("boron", 4, enrichment=0.9, enrichment_target='B10', enrichment_type='ao')
+    B4C_enriched.add_element("boron", 4, enrichment=90.0, enrichment_target='B10', enrichment_type='ao')
     B4C_enriched.add_element("carbon", 1)
     B4C_enriched.set_density("g/cm3", 2.52)
 

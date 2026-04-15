@@ -52,7 +52,7 @@ update_params({
     'Axial Reflector': 'Graphite',
     'Matrix Material': 'Graphite', # matrix material is a background material within the compact fuel element between the TRISO particles
     'Moderator': 'Graphite', # The moderator is outside this compact fuel region 
-    'Moderator Booster': 'ZrH',
+    'Moderator Booster Materials': ['ZrH'],
     'Coolant': 'Helium',
     'Common Temperature': 750,  # Kelvins
     'Control Drum Absorber': 'B4C_enriched',  # The absorber material in the control drums
@@ -70,7 +70,7 @@ update_params({
     'Compact Fuel Radius': 0.6225,  # cm
     'Packing Fraction': 0.3,
     'Coolant Channel Radius': 0.35,  # cm
-    'Moderator Booster Radius': 0.55, # cm
+    'Moderator Booster Radii': [0.55],  # cm
     'Lattice Pitch': 1.85,
     'Assembly Rings': 6,
     'Core Rings': 5,
@@ -302,6 +302,6 @@ update_params({
 #                                           Sec. 11: Post Processing
 # **************************************************************************************************************************
 params['Number of Samples'] = 1 # Accounting for cost uncertainties
-estimate = detailed_bottom_up_cost_estimate('./cost/Cost_Database.xlsx', params, "examples/output_GCMR_B.xlsx")
+estimate = detailed_bottom_up_cost_estimate('cost/Cost_Database.xlsx')
 elapsed_time = (time.time() - time_start) / 60
 print('Execution time:', np.round(elapsed_time, 1), 'minutes')

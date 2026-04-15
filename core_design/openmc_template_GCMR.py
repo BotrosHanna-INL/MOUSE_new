@@ -80,8 +80,27 @@ def build_openmc_model_GCMR(params):
         surf = openmc.ZCylinder(r=radius)
         cell = openmc.Cell(region=-surf & -active_core_maxz & +active_core_minz, fill=material_inside)
         outside_cell = openmc.Cell(region=+surf & -active_core_maxz & +active_core_minz, fill=material_outside)
-        universe = openmc.Universe(cells=[cell, outside_cell])    
+        universe = openmc.Universe(cells=[cell, outside_cell])
         return universe
+
+    def create_multiregion_pin_universe(radii, materials, active_core_maxz, active_core_minz, outer_material):
+        """
+        Build a pin universe with one or more concentric cylindrical regions.
+        radii     : list of cumulative outer radii (cm), innermost first
+        materials : list of OpenMC material objects, same length as radii
+        outer_material : material filling the region beyond the outermost radius
+        """
+        surfs = [openmc.ZCylinder(r=r) for r in radii]
+        cells = []
+        for i, (surf, mat) in enumerate(zip(surfs, materials)):
+            if i == 0:
+                region = -surf & -active_core_maxz & +active_core_minz
+            else:
+                region = +surfs[i - 1] & -surf & -active_core_maxz & +active_core_minz
+            cells.append(openmc.Cell(region=region, fill=mat))
+        # Region outside the outermost surface
+        cells.append(openmc.Cell(region=+surfs[-1] & -active_core_maxz & +active_core_minz, fill=outer_material))
+        return openmc.Universe(cells=cells)
 
     def create_assembly(num_rings, lattice_pitch, inner_fill, fuel_pin , moderator_pin, outer_ring=None, simplified_output=True):
         # Create a hexagonal lattice for the assembly
@@ -177,7 +196,7 @@ def build_openmc_model_GCMR(params):
     fuel = materials_database[params['Fuel']]
     reflector = materials_database[params['Radial Reflector']]
     moderator = materials_database[params['Moderator']]
-    moderator_booster = materials_database[params['Moderator Booster']]
+    booster_materials_list = [materials_database[m] for m in params['Moderator Booster Materials']]
 
     control_drum_absorber = materials_database[params['Control Drum Absorber']]
     control_drum_reflector = materials_database[params['Control Drum Reflector']]
@@ -223,8 +242,12 @@ def build_openmc_model_GCMR(params):
     small_coolant_universe = create_universe_from_core_top_and_bottom_planes(params['Coolant Channel Radius'],\
     active_core_maxz, active_core_minz, coolant , materials_database[params['Matrix Material']])
     
-    booster_universe = create_universe_from_core_top_and_bottom_planes(params['Moderator Booster Radius'],\
-    active_core_maxz, active_core_minz, materials_database[params['Moderator Booster']] , materials_database[params['Moderator']]) 
+    booster_universe = create_multiregion_pin_universe(
+        params['Moderator Booster Radii'],
+        booster_materials_list,
+        active_core_maxz, active_core_minz,
+        materials_database[params['Moderator']]
+    )
 
 
     # # # Construct hexagonal cells surrounded by coolant channels
@@ -395,7 +418,7 @@ def build_openmc_model_GCMR(params):
     kernel_volume = sphere_volume(params['Fuel Pin Radii'][0])
     fuel_volume = core_triso_number * kernel_volume
     fuel.volume = fuel_volume
-    all_materials = fuel_materials + [ fuel, reflector,  moderator, moderator_booster, control_drum_absorber, coolant, control_drum_reflector ]
+    all_materials = fuel_materials + [fuel, reflector, moderator] + booster_materials_list + [control_drum_absorber, coolant, control_drum_reflector]
     
     # removing "None" materials
     all_materials_cleaned_list = [item for item in all_materials if item is not None]

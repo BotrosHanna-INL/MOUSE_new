@@ -295,7 +295,7 @@ for params['Fuel'] in ['TRIGA_fuel', 'UO2']:
     # **************************************************************************************************************************
     params['Number of Samples'] = 100
     tracked_params_list = ["Fuel", "Fuel Lifetime", "Mass U235", "Mass U238", "Uranium Mass", "Max Peaking Factor"]
-    parametric_studies('cost/Cost_Database.xlsx', params, tracked_params_list, 'examples/output_parametric_LTMR_fuel.csv')
+    parametric_studies('cost/Cost_Database.xlsx', tracked_params_list)
 
     elapsed_time = (time.time() - time_start) / 60
     print('Execution time:', np.round(elapsed_time, 2), 'minutes')

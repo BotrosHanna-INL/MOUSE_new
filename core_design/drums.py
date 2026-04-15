@@ -84,27 +84,48 @@ def calculate_reflector_mass_GCMR(params):
     params['Axial Reflector Mass'] = 2 * (1/1000) * materials_database[params['Axial Reflector']].density * cylinder_volume(params['Core Radius'], params['Axial Reflector Thickness'])
 
 
-def calculate_moderator_mass_GCMR(params): 
+def calculate_moderator_mass_GCMR(params):
     materials_database = collect_materials_data(params)
     tot_number_assemblies = calculate_number_of_rings(params['Core Rings'] )
 
     # The area of one hexagonal lattice in the core
     A_hex  = hexagonal_area_from_ftf(params['Assembly FTF'])
-    
+
     # area occuplied by the fuel in one hexagonal lattice (assembly)
     num_fuel_regions_per_hex = calculate_number_of_rings( params['Assembly Rings'] - 1 )
 
     area_fuel_per_hex = params['Packing Fraction'] * circle_area(params['Compact Fuel Radius']) * num_fuel_regions_per_hex
     area_coolant_per_hex = 2 * num_fuel_regions_per_hex * circle_area(params['Coolant Channel Radius'])
-    area_moderator_booster_per_hex =  0.5 * 6 * (params['Assembly Rings'] - 1) * circle_area(params['Moderator Booster Radius'] )
+
+    # Moderator booster: one or more concentric regions per pin.
+    # The outermost radius defines the total pin footprint (used for moderator displacement).
+    booster_materials = params['Moderator Booster Materials']  # list of material name strings
+    booster_radii = params['Moderator Booster Radii']          # list of cumulative radii (cm)
+    assert len(booster_materials) == len(booster_radii), \
+        f"'Moderator Booster Materials' (len={len(booster_materials)}) and " \
+        f"'Moderator Booster Radii' (len={len(booster_radii)}) must have the same length."
+
+    # Total pin footprint uses outermost radius
+    area_moderator_booster_per_hex = 0.5 * 6 * (params['Assembly Rings'] - 1) * circle_area(booster_radii[-1])
+
+    # Per-region annular areas and masses
+    tot_booster_mass = 0.0
+    num_booster_pins_per_hex = 0.5 * 6 * (params['Assembly Rings'] - 1)
+    for i, (mat_name, r_outer) in enumerate(zip(booster_materials, booster_radii)):
+        r_inner = booster_radii[i - 1] if i > 0 else 0.0
+        annular_area = circle_area(r_outer) - circle_area(r_inner)
+        density = materials_database[mat_name].density  # g/cm³, from materials database
+        region_mass = tot_number_assemblies * num_booster_pins_per_hex * annular_area \
+                      * params['Active Height'] * density / 1000  # kg
+        params[f'Moderator Booster Mass {mat_name}'] = region_mass
+        tot_booster_mass += region_mass
 
     # area ocuupied by the moderators in one of one hexagonal lattices
-    moderator_area = A_hex - area_fuel_per_hex - area_coolant_per_hex - area_moderator_booster_per_hex 
+    moderator_area = A_hex - area_fuel_per_hex - area_coolant_per_hex - area_moderator_booster_per_hex
 
     # total moderator mass
     tot_moderator_mass = tot_number_assemblies * moderator_area  * params['Active Height'] * materials_database[params['Moderator']].density / 1000 # Kg
-    params['Moderator Mass'] = tot_moderator_mass 
-    tot_booster_mass   = tot_number_assemblies * area_moderator_booster_per_hex * params['Active Height'] * materials_database[params['Moderator Booster']].density / 1000 # Kg
+    params['Moderator Mass'] = tot_moderator_mass
     params['Moderator Booster Mass'] = tot_booster_mass
 
 def calculate_reflector_and_moderator_mass_HPMR(params):

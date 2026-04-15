@@ -1,13 +1,22 @@
 # Copyright 2025, Battelle Energy Alliance, LLC, ALL RIGHTS RESERVED
 
 """
-This script performs a bottom-up cost estimate for a heat pipe Microreactor.
-OpenMC is used for core design calculations, and other Balance of Plant components are estimated.
-Users can modify parameters in the "params" dictionary below.
+This script demonstrates the multi-region moderator booster feature for the GCMR.
+
+The booster pin is composed of two concentric cylindrical regions
+  - Inner region (r = 0 to 0.40 cm): 
+  - Outer region (r = 0.40 to 0.55 cm): 
+
+Both materials are fetched from the materials database.
+
+Mass is calculated per material (params['Moderator Booster Mass ZrH'] and
+params['Moderator Booster Mass Graphite']) and summed into params['Moderator Booster Mass'].
+Costs are looked up separately for each material in the cost database (Account 221.34).
 """
+
 import numpy as np
 import watts  # Simulation workflows for one or multiple codes
-from core_design.openmc_template_HPMR import *
+from core_design.openmc_template_GCMR import *
 from core_design.utils import *
 from core_design.drums import *
 from reactor_engineering_evaluation.fuel_calcs import fuel_calculations
@@ -30,7 +39,6 @@ def update_params(updates):
 # **************************************************************************************************************************
 #                                                Sec. 0: Settings
 # **************************************************************************************************************************
-
 update_params({
     'plotting': "Y",  # "Y" or "N": Yes or No
     'cross_sections_xml_location': '/projects/MRP_MOUSE/openmc_data/endfb-viii.0-hdf5/cross_sections.xml', # on INL HPC
@@ -40,21 +48,29 @@ update_params({
 # **************************************************************************************************************************
 #                                                Sec. 1: Materials
 # **************************************************************************************************************************
-# These params are based on this report: https://inldigitallibrary.inl.gov/sites/sti/sti/Sort_99962.pdf
 update_params({
-    'reactor type': "HPMR",
+    'reactor type': "GCMR",  # LTMR or GCMR
     'TRISO Fueled': "Yes",
-    'Fuel': 'homog_TRISO',     
-    'Enrichment': 0.19985,
+    'Fuel': 'UN',
+    'Enrichment': 0.1975,  # The enrichment is a fraction. It has to be between 0 and 1
+    'UO2 atom fraction': 0.7,  # Mixing UO2 and UC by atom fraction
     'Radial Reflector': 'Graphite',
     'Axial Reflector': 'Graphite',
-    'Moderator': 'monolith_graphite',
+    'Matrix Material': 'Graphite', # matrix material is a background material within the compact fuel element between the TRISO particles
+    'Moderator': 'Graphite', # The moderator is outside this compact fuel region
+
+    # --- Multi-region booster pin ---
+    # Two concentric regions, listed from innermost to outermost.
+    # Each entry in 'Moderator Booster Materials' corresponds to the same-index entry in 'Moderator Booster Radii'.
+    # The outermost radius (0.55 cm) matches the single-region Design A baseline.
+    'Moderator Booster Materials': ['Graphite', 'ZrH'],  
+    # --------------------------------
+
     'Coolant': 'Helium',
-    'Control Drum Absorber': 'B4C_natural',
-    'Control Drum Reflector': 'Graphite',
-    'Cooling Device': 'heatpipe',
-    'Common Temperature': 1000,  #K
-    'HX Material': 'SS316'
+    'Common Temperature': 850,  # Kelvins
+    'Control Drum Absorber': 'B4C_enriched',  # The absorber material in the control drums
+    'Control Drum Reflector': 'Graphite',  # The reflector material in the control drums
+    'HX Material': 'SS316',
 })
 
 # **************************************************************************************************************************
@@ -62,98 +78,93 @@ update_params({
 # **************************************************************************************************************************
 
 update_params({
-    'Fuel Pin Materials': ['homog_TRISO', 'Helium'],
-    'Fuel Pin Radii': [1.00, 1.05], #cm
-    'Heat Pipe Materials': ['heatpipe', 'Helium'],
-    'Heat Pipe Radii': [1.10, 1.15],
-    'Number of Rings per Assembly': 6,
-    'Number of Rings per Core': 3,
-    'Lattice Pitch': 3.4,
+    # fuel pin details
+    'Fuel Pin Materials': ['UN', 'buffer_graphite', 'PyC', 'SiC', 'PyC'],
+    'Fuel Pin Radii': [0.025, 0.035, 0.039, 0.0425, 0.047],  # cm
+    'Compact Fuel Radius': 0.6225,  # cm # The radius of the area that is occupied by the TRISO particles (fuel compact/ fuel element)
+    'Packing Fraction': 0.3,
+
+    # Coolant channel and booster dimensions
+    'Coolant Channel Radius': 0.35,  # cm
+
+    # --- Multi-region booster radii ---
+    # Cumulative outer radii for each booster region, same order as 'Moderator Booster Materials'.
+    # Region 1 (ZrH):     r = 0     to 0.40 cm
+    # Region 2 (Graphite): r = 0.40 to 0.55 cm
+    'Moderator Booster Radii': [0.40, 0.55],  # cm
+    # ----------------------------------
+
+    'Lattice Pitch': 2.25,
+    'Assembly Rings': 6,
+    'Core Rings': 5,
 })
-params['Assembly FTF'] = (params['Lattice Pitch'] * (params['Number of Rings per Assembly'] - 1) + 1.4 * params['Fuel Pin Radii'][-1]) * np.sqrt(3)
-params['hexagonal Core Edge Length'] = (params['Assembly FTF'] * (params['Number of Rings per Core']-1)) + (params['Assembly FTF']/2) + 6.6
-params['Radial Reflector Thickness'] = 50 #cm
-params['Core Radius'] = 0.5*np.sqrt(3)*params['hexagonal Core Edge Length'] + params['Radial Reflector Thickness']
-params['Active Height'] = 2 * params['Core Radius'] #cm  
-params['Axial Reflector Thickness'] = params['Radial Reflector Thickness']
-params['Fuel Pin Count per Assembly'] = calculate_number_fuel_elements_hpmr(params['Number of Rings per Assembly'])
-params['Fuel Assemblies Count'] = (3 * params['Number of Rings per Core']**2) - (3 * params['Number of Rings per Core'])
-params['Fuel Pin Count'] = params['Fuel Assemblies Count'] * params['Fuel Pin Count per Assembly']
-number_of_heatpipes_hmpr(params)
+params['Assembly FTF'] = params['Lattice Pitch']*(params['Assembly Rings']-1)*np.sqrt(3)
+params['Radial Reflector Thickness'] = 27.393 # cm # radial reflector
+params['Axial Reflector Thickness'] = params['Radial Reflector Thickness'] # cm
+params['Core Radius'] = params['Assembly FTF']*params['Core Rings'] +  params['Radial Reflector Thickness']
+params['Active Height'] = 250
 
 # **************************************************************************************************************************
 #                                           Sec. 3: Control Drums
-# ************************************************************************************************************************** 
-
+# **************************************************************************************************************************
 update_params({
-    'Drum Radius': 0.4 * params['Radial Reflector Thickness'], 
-    'Drum Absorber Thickness': 1,  # cm
-    'Drum Height': params['Active Height']
-})
-
+    'Drum Radius': 9, # cm
+    'Drum Absorber Thickness': 1, # cm
+    'Drum Height': params['Active Height'] + 2*params['Axial Reflector Thickness'],
+    })
 calculate_drums_volumes_and_masses(params)
-calculate_reflector_and_moderator_mass_HPMR(params)
+calculate_reflector_mass_GCMR(params)
+calculate_moderator_mass_GCMR(params)
+# After this call:
+#   params['Moderator Booster Mass ZrH']      — mass of ZrH inner region (kg)
+#   params['Moderator Booster Mass Graphite'] — mass of Graphite outer region (kg)
+#   params['Moderator Booster Mass']          — total booster mass (kg)
 
 # **************************************************************************************************************************
 #                                           Sec. 4: Overall System
-# ************************************************************************************************************************** 
+# **************************************************************************************************************************
 update_params({
-    'Power MWt': 7, 
-    'Thermal Efficiency': 0.36,
-    'Heat Flux Criteria': 0.9,  # MW/m^2 
-    'Time Steps': [t * 86400 for t in [0.01, 0.99, 3, 6, 20, 70, 100, 165, 365, 365, 365, 365, 365, 365, 365.00]]  # seconds
-})
+    'Power MWt': 15,  # MWt
+    'Thermal Efficiency': 0.4,
+    'Heat Flux Criteria': 0.9,  # MW/m^2 (This one needs to be reviewed)
+    'Burnup Steps': [0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0,
+                     30.0, 40.0, 50.0, 60.0, 80.0, 100.0, 120.0]  # MWd_per_Kg
+    })
+
 params['Power MWe'] = params['Power MWt'] * params['Thermal Efficiency']
-params['Heat Flux'] = calculate_heat_flux(params)
+params['Heat Flux'] = calculate_heat_flux_TRISO(params) # MW/m^2
 
 # **************************************************************************************************************************
 #                                           Sec. 5: Running OpenMC
 # **************************************************************************************************************************
 
-# --- Shutdown Margin (SDM) ---
-# When True, an additional OpenMC simulation is run with all control drums rotated
-# to the fully inserted (ARI - All Rods In) position. The SDM is then calculated
-# as the difference in reactivity (in pcm) between the ARO and ARI configurations.
-# A positive SDM means the reactor can be safely shut down with all drums inserted.
-# Recommended: True for final design verification; can be set to False to save
-# computation time during early design exploration.
 params['SD Margin Calc'] = False  # True or False
-
-# --- Isothermal Temperature Coefficient ---
-# When True, two additional OpenMC simulations are run: one at 'Common Temperature'
-# and one at 'Common Temperature' + 'Temperature Perturbation'. The temperature
-# coefficient is then calculated in units of pcm/K.
-# A negative coefficient indicates the reactor is self-stabilizing (desired behavior).
-# Recommended: True for safety analysis; can be set to False to save computation time.
 params['Isothermal Temperature Coefficients'] = True  # True or False
-
-# --- Temperature Perturbation ---
-# The temperature step (in Kelvin) used for the isothermal temperature coefficient calculation.
-# Must be large enough to produce a keff difference above OpenMC Monte Carlo statistical
-# noise, but small enough to stay in the linear reactivity regime.
-# Typical range: 50–300 K. 100 K is chosen here as a balance between accuracy and
-# avoiding nonlinear effects. 
-# Units: Kelvin
-# This parameter is REQUIRED only when 'Isothermal Temperature Coefficients' is True.
 params['Temperature Perturbation'] = 100  # K
 
 heat_flux_monitor = monitor_heat_flux(params)
-run_openmc(build_openmc_model_HPMR, heat_flux_monitor, params)
+run_openmc(build_openmc_model_GCMR, heat_flux_monitor, params)
 fuel_calculations(params)  # calculate the fuel mass and SWU
 
 # **************************************************************************************************************************
-#                                        Sec. 6: Primary Loop + Balance of Plant
-# ************************************************************************************************************************** 
+#                                         Sec. 6: Primary Loop + Balance of Plant
+# **************************************************************************************************************************
 params.update({
     'Primary Loop Purification': True,
     'Secondary HX Mass': 0,
-    'Primary Loop Count': 2,
-    'Primary Loop Inlet Temperature': 650 + 273.15, # K
-    'Primary Loop Outlet Temperature': 650 + 273.15, # K
-    'Secondary Loop Inlet Temperature': 300 + 273.15, # K
-    'Secondary Loop Outlet Temperature': 630 + 273.15, # K,
-   })
+    'Compressor Pressure Ratio': 4,
+    'Compressor Isentropic Efficiency': 0.8,
+    'Primary Loop Count': 2, # Number of Primary Coolant Loops present in plant
+    'Primary Loop per loop load fraction': 0.5,
+    'Primary Loop Inlet Temperature': 300 + 273.15, # K
+    'Primary Loop Outlet Temperature': 550 + 273.15, # K
+    'Secondary Loop Inlet Temperature': 290 + 273.15, # K
+    'Secondary Loop Outlet Temperature': 500 + 273.15, # K
+    'Primary Loop Pressure Drop': 50e3, # Pa
+})
 params['Primary HX Mass'] = calculate_heat_exchanger_mass(params)  # Kg
+mass_flow_rate(params)
+compressor_power(params)
 
 params.update({
     'BoP Count': 2,
@@ -161,11 +172,17 @@ params.update({
     })
 params['BoP Power kWe'] = 1000 * params['Power MWe'] * params['BoP per loop load fraction']
 
+params.update({
+    'Integrated Heat Transfer Vessel Thickness': 0, # cm
+    'Integrated Heat Transfer Vessel Material': 'SA508',
+})
+GCMR_integrated_heat_transfer_vessel(params)
+
 # **************************************************************************************************************************
 #                                           Sec. 7 : Shielding
-# ************************************************************************************************************************** 
+# **************************************************************************************************************************
 update_params({
-    'In Vessel Shield Thickness': 0,  # cm (no shield in vessel for HPMR)
+    'In Vessel Shield Thickness': 0,  # cm (no shield in vessel for GCMR)
     'In Vessel Shield Inner Radius': params['Core Radius'],
     'In Vessel Shield Material': 'B4C_natural',
     'Out Of Vessel Shield Thickness': 39.37,  # cm
@@ -176,7 +193,7 @@ params['In Vessel Shield Outer Radius'] = params['Core Radius'] + params['In Ves
 
 # **************************************************************************************************************************
 #                                           Sec. 8 : Vessels Calculations
-# ************************************************************************************************************************** 
+# **************************************************************************************************************************
 update_params({
     'Vessel Radius': params['Core Radius'] + params['In Vessel Shield Thickness'],
     'Vessel Thickness': 1,  # cm
@@ -185,9 +202,9 @@ update_params({
     'Vessel Upper Gas Gap': 0,
     'Vessel Bottom Depth': 32.129,
     'Vessel Material': 'stainless_steel',
-    'Gap Between Vessel And Guard Vessel': 0,  
+    'Gap Between Vessel And Guard Vessel': 0,
     'Guard Vessel Thickness': 0,  # cm
-    'Guard Vessel Material': 'low_alloy_steel', 
+    'Guard Vessel Material': 'low_alloy_steel',
     'Gap Between Guard Vessel And Cooling Vessel': 5,  # cm
     'Cooling Vessel Thickness': 0.5,  # cm
     'Cooling Vessel Material': 'stainless_steel',
@@ -214,9 +231,9 @@ update_params({
     'Security Staff Per Shift': 1
 })
 
-params['Onsite Coolant Inventory'] = 1 * 24.417 * 8.2402 # kg
-params['Replacement Coolant Inventory'] = 0
-# params['Annual Coolant Supply Frequency'] = 1 if params['Primary Loop Purification'] else 6
+params['Onsite Coolant Inventory'] = 10 * 24.417 * 8.2402 # kg
+params['Replacement Coolant Inventory'] = params['Onsite Coolant Inventory'] / 4
+params['Annual Coolant Supply Frequency'] = 1 if params['Primary Loop Purification'] else 6
 
 total_refueling_period = params['Fuel Lifetime'] + params['Refueling Period'] + params['Startup Duration after Refueling'] # days
 total_refueling_period_yr = total_refueling_period/365
@@ -274,11 +291,11 @@ update_params({
     'NOAK Unit Number': 100,
 })
 
-# --- No Tax Credits Applied ---
-# This example does not apply any ITC or PTC tax credits.
-# To apply ITC, add: params['ITC credit level'] = 0.30  (see watts_exec_LTMR.py for full details)
-# To apply PTC, add: params['PTC credit value'] = 15.0  (see watts_exec_GCMR.py for full details)
-# Note: ITC and PTC are mutually exclusive — only one can be selected per project.
+params['PTC credit value'] = 15.0  # $/MWh
+params['PTC credit period'] = 10  # years
+params['domestic_content_bonus'] = 0.10
+params['energy_community_bonus'] = 0.10
+params['Tax Rate'] = 0.21  # fraction
 
 # **************************************************************************************************************************
 #                                           Sec. 11: Post Processing

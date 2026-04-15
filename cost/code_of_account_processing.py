@@ -7,20 +7,30 @@ def remove_irrelevant_account(df, params):
     has_sec_optional = 'Sec Optional Variable' in df.columns  # ← add this check
 
     for index, row in df.iterrows():
+        def _optional_matches(param_val, expected_val):
+            """Return True if param_val equals expected_val, or if param_val is a list that contains expected_val."""
+            if isinstance(param_val, list):
+                return expected_val in param_val
+            return param_val == expected_val
+
         # Check for 'Optional Variable'
         if not pd.isna(row['Optional Variable']):
-            if row['Optional Variable'] in params and params[row['Optional Variable']] == row['Optional Value']:
+            if row['Optional Variable'] in params and _optional_matches(params[row['Optional Variable']], row['Optional Value']):
                 print("\n")
                 print(f"For the cost of the Account {row['Account']}: {row['Account Name']}, the {row['Optional Variable']} is selected to be {row['Optional Value']}")
+                # Append the selected optional value to Account Title for clarity in the output
+                df.at[index, 'Account Title'] = str(row['Account Title']) + ' - ' + str(row['Optional Value'])
             else:
                 indices_to_drop.append(index)
                 continue
 
         # Check for 'Sec Optional Variable' only if column exists
         if has_sec_optional and not pd.isna(row['Sec Optional Variable']):
-            if row['Sec Optional Variable'] in params and params[row['Sec Optional Variable']] == row['Sec Optional Value']:
+            if row['Sec Optional Variable'] in params and _optional_matches(params[row['Sec Optional Variable']], row['Sec Optional Value']):
                 print("\n")
                 print(f"For the cost of the Account {row['Account']}: {row['Account Name']}, the {row['Sec Optional Variable']} is selected to be {row['Sec Optional Value']}")
+                # Also append the sec optional value
+                df.at[index, 'Account Title'] = str(df.at[index, 'Account Title']) + ' - ' + str(row['Sec Optional Value'])
             else:
                 indices_to_drop.append(index)
                 continue
