@@ -738,9 +738,13 @@ with streamlit_analytics.track():
             '<div style="color:white;font-weight:800;font-size:1.1rem;letter-spacing:0.05em;margin-top:0.2rem;">MOUSE</div>'
             '<div style="color:#64748b;font-size:0.65rem;letter-spacing:0.06em;text-transform:uppercase;line-height:1.4;">'
             'Microreactor Optimization<br>Using Simulation &amp; Economics</div>'
-            '<div style="margin-top:0.5rem;">'
+            '<div style="color:#94a3b8;font-size:0.72rem;font-weight:600;margin-top:0.5rem;letter-spacing:0.02em;">'
+            '🏛 Idaho National Laboratory</div>'
+            '<div style="margin-top:0.6rem;">'
             '<a href="https://github.com/IdahoLabResearch/MOUSE" target="_blank" '
-            'style="color:#93c5fd;font-size:0.65rem;text-decoration:none;">⬡ GitHub Repo</a>'
+            'style="display:inline-block;background:#24292e;color:white;font-size:0.72rem;'
+            'font-weight:600;text-decoration:none;padding:0.3rem 0.8rem;border-radius:20px;'
+            'border:1px solid #444;letter-spacing:0.02em;">&#9651; Open Source on GitHub</a>'
             '</div>'
             '</div>',
             unsafe_allow_html=True,
@@ -908,13 +912,18 @@ with streamlit_analytics.track():
                              border-radius:50%;background:rgba(255,255,255,0.04);"></div>
                  <div style="position:absolute;right:3rem;top:50%;transform:translateY(-50%);
                              font-size:7rem;opacity:0.1;line-height:1;">⚛</div>
-                 <div style="font-size:0.75rem;opacity:0.65;margin-bottom:0.7rem;">
-                   Based on the open-source
+                 <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:1.1rem;">
+                   <span style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);
+                                 border-radius:20px;padding:0.35rem 1rem;font-size:0.82rem;font-weight:700;
+                                 color:white;letter-spacing:0.02em;">
+                     🏛 Idaho National Laboratory
+                   </span>
                    <a href="https://github.com/IdahoLabResearch/MOUSE" target="_blank"
-                      style="color:#93c5fd;font-weight:600;text-decoration:none;">
-                     IdahoLabResearch/MOUSE
+                      style="background:#24292e;border:1px solid rgba(255,255,255,0.25);
+                             border-radius:20px;padding:0.35rem 1rem;font-size:0.82rem;font-weight:700;
+                             color:white;text-decoration:none;letter-spacing:0.02em;">
+                     &#9651; Open Source on GitHub &rarr; IdahoLabResearch/MOUSE
                    </a>
-                   repository on GitHub
                  </div>
                  <h1 style="font-size:2.4rem;font-weight:800;margin:0 0 0.3rem;color:white;line-height:1.15;">
                    MOUSE
