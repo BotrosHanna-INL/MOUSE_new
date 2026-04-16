@@ -39,9 +39,8 @@ def calculate_high_level_accounts_cost(df, target_level, option, FOAK_or_NOAK):
                 if not pd.isna(children_accounts):
                     children_accounts_list = children_accounts.split(",")
                     total_sum = 0
-                    for account in children_accounts_list:
-                        account_value = float(account)
-                        total_sum += df[df["Account"] == account_value][cost_column].values[0]
+                    for row_idx in children_accounts_list:
+                        total_sum += df.loc[int(row_idx), cost_column]
                     df.at[index, cost_column] = total_sum
 
     return df
