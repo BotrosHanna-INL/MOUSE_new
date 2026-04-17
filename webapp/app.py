@@ -99,7 +99,7 @@ from st_cookies_manager import EncryptedCookieManager
 
 from reactor_config import build_params, SubcriticalError, ESCALATION_YEAR
 from cost.cost_estimation import bottom_up_cost_estimate, transform_dataframe
-from cost.cost_drivers import cost_drivers_estimate, is_double_digit_excluding_multiples_of_10
+from cost.cost_drivers import cost_drivers_estimate, is_double_digit_excluding_multiples_of_10, get_detailed_driver_rows
 
 # ---------------------------------------------------------------------------
 # Performance patches: cache Excel reads that would otherwise repeat on every run.
@@ -251,8 +251,8 @@ def _run_estimate(reactor_type, power_mwt, enrichment, interest_rate, discount_r
 
     p = build_params(reactor_type, power_mwt, enrichment, overrides)
     raw_df = bottom_up_cost_estimate('cost/Cost_Database.xlsx', p)
-    enriched_df = cost_drivers_estimate(raw_df, p)
-    return transform_dataframe(enriched_df), enriched_df, p
+    enriched_df, detailed_sorted_df = cost_drivers_estimate(raw_df, p)
+    return transform_dataframe(enriched_df), enriched_df, detailed_sorted_df, p
 
 
 # ---------------------------------------------------------------------------
@@ -1020,7 +1020,7 @@ with streamlit_analytics.track():
     # ── Run cost estimate ───────────────────────────────────────────────────
     with st.spinner('Running cost estimate…'):
         try:
-            display_df, enriched_df, params = _run_estimate(
+            display_df, enriched_df, detailed_sorted_df, params = _run_estimate(
                 reactor_type, power_mwt, enrichment,
                 interest_rate / 100.0, discount_rate / 100.0, construction_duration, debt_to_equity,
                 operation_mode, emergency_shutdowns, startup_duration, startup_duration_refueling,
@@ -1319,6 +1319,80 @@ with streamlit_analytics.track():
             buf.seek(0)
             st.image(buf, use_container_width=True)
             plt.close(fig)
+            matplotlib.rcParams.update(matplotlib.rcParamsDefault)
+
+        # --- Detailed cost drivers (one level deeper) ---
+        _det = detailed_sorted_df.copy() if not detailed_sorted_df.empty else pd.DataFrame()
+
+        if _det.empty:
+            st.info('No detailed accounts with FOAK LCOE >= 5 $/MWh found.')
+        else:
+            st.markdown('---')
+            st.markdown(
+                '<p style="color:#64748b;font-size:0.85rem;margin-bottom:1rem;">'
+                '<strong>Detailed cost drivers</strong> — one level deeper than the chart above. '
+                '3-digit sub-accounts are shown where available; otherwise the 2-digit parent is kept.</p>',
+                unsafe_allow_html=True,
+            )
+
+            bar_width = 0.38
+            r1 = np.arange(len(_det))
+            r2 = r1 + bar_width
+
+            matplotlib.rcParams.update({
+                'font.family':    'DejaVu Sans',
+                'font.size':       13,
+                'axes.titlesize':  15,
+                'axes.labelsize':  13,
+                'xtick.labelsize': 12,
+                'ytick.labelsize': 12,
+            })
+
+            fig2, ax2 = plt.subplots(figsize=(max(13, len(_det) * 1.6), 7))
+            fig2.patch.set_facecolor('white')
+            ax2.set_facecolor('#f8fafc')
+
+            foak_err2 = _det['FOAK LCOE_std'] if 'FOAK LCOE_std' in _det.columns else None
+            noak_err2 = _det['NOAK LCOE_std'] if 'NOAK LCOE_std' in _det.columns else None
+
+            ax2.bar(r1, _det['FOAK LCOE'], width=bar_width,
+                    color='#E05C2B', edgecolor='white', linewidth=0.8,
+                    label='FOAK', zorder=3,
+                    yerr=foak_err2, capsize=5,
+                    error_kw=dict(elinewidth=1.8, ecolor='#9a3412', capthick=1.8))
+            ax2.bar(r2, _det['NOAK LCOE'], width=bar_width,
+                    color='#1B7FBD', edgecolor='white', linewidth=0.8,
+                    label='NOAK', zorder=3,
+                    yerr=noak_err2, capsize=5,
+                    error_kw=dict(elinewidth=1.8, ecolor='#1155aa', capthick=1.8))
+
+            ax2.set_xticks(r1 + bar_width / 2)
+            ax2.set_xticklabels(_det['Account Title'], rotation=35, ha='right',
+                                fontsize=12, color='#1e293b', fontweight='500')
+            ax2.set_ylabel('LCOE Contribution ($/MWh)', fontsize=13,
+                           color='#1e293b', labelpad=10)
+            ax2.yaxis.set_tick_params(labelcolor='#1e293b', labelsize=12)
+            ax2.set_xlim(-0.4, len(_det) - 0.15)
+
+            for spine in ['top', 'right', 'left']:
+                ax2.spines[spine].set_visible(False)
+            ax2.spines['bottom'].set_color('#cbd5e1')
+            ax2.yaxis.grid(True, linestyle='--', linewidth=0.7,
+                           alpha=0.7, color='#cbd5e1', zorder=0)
+            ax2.set_axisbelow(True)
+
+            legend2 = ax2.legend(fontsize=12, frameon=True, framealpha=1,
+                                 edgecolor='#e2e8f0', facecolor='white',
+                                 loc='upper right', handlelength=1.5,
+                                 borderpad=0.8, labelspacing=0.5)
+            legend2.get_frame().set_linewidth(1.0)
+
+            plt.tight_layout(pad=2.0)
+            buf2 = io.BytesIO()
+            fig2.savefig(buf2, format='png', dpi=200, bbox_inches='tight', facecolor='white')
+            buf2.seek(0)
+            st.image(buf2, use_container_width=True)
+            plt.close(fig2)
             matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 
     # ═══════════════════════════════════════════════════════════════
