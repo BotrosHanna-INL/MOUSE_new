@@ -469,7 +469,7 @@ def detailed_bottom_up_cost_estimate(cost_database_filename):
     # Always compute per-account LCOE contributions so they appear in Excel.
     # The PNG plot is only generated if params['plotting'] == "Y" —
     # that gate lives inside cost_drivers_estimate.
-    lcoe_enriched_table = cost_drivers_estimate(detailed_cost_table, params)
+    lcoe_enriched_table, _ = cost_drivers_estimate(detailed_cost_table, params)
 
     if lcoe_enriched_table is not None:
         pretty_lcoe_df = transform_dataframe(lcoe_enriched_table)
