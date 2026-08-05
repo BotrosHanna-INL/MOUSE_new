@@ -834,6 +834,7 @@ def _lcoe_at_noak_unit(reactor_type, power_mwt, enrichment, interest_rate, disco
 # ---------------------------------------------------------------------------
 _ANALYTICS_DB_PATH = Path(_repo_root) / 'webapp' / 'analytics.db'
 _ANALYTICS_COOKIE_NAME = 'anonymous_id'
+_ANALYTICS_OPT_OUT_COOKIE_NAME = 'analytics_opt_out'
 _POSTHOG_PROJECT_TOKEN = 'phc_r3w3KjhmNbqhzDrCFRVVCnqduaqxPwLksEPd8FPLvUzX'
 _POSTHOG_CAPTURE_URL = 'https://us.i.posthog.com/i/v0/e/'
 
@@ -871,6 +872,16 @@ def _get_or_create_anonymous_id(cookies):
         cookies[_ANALYTICS_COOKIE_NAME] = anonymous_id
         cookies.save()
     return anonymous_id
+
+
+def _analytics_opted_out(cookies):
+    """Persist a browser-specific developer opt-out via ?analytics=off."""
+    if str(st.query_params.get('analytics', '')).lower() == 'off':
+        if cookies.get(_ANALYTICS_OPT_OUT_COOKIE_NAME) != '1':
+            cookies[_ANALYTICS_OPT_OUT_COOKIE_NAME] = '1'
+            cookies.save()
+        return True
+    return cookies.get(_ANALYTICS_OPT_OUT_COOKIE_NAME) == '1'
 
 
 def _get_first_seen(conn, anonymous_id, now_utc):
@@ -2308,7 +2319,8 @@ if not cookies.ready():
     st.stop()
 
 analytics_conn = _get_analytics_conn()
-anonymous_id = _get_or_create_anonymous_id(cookies)
+analytics_opted_out = _analytics_opted_out(cookies)
+anonymous_id = None if analytics_opted_out else _get_or_create_anonymous_id(cookies)
 
 # ---------------------------------------------------------------------------
 # Main app wrapped in analytics tracker
@@ -2342,7 +2354,13 @@ with streamlit_analytics.track():
         )
         reactor_type = _LABEL_TO_KEY[reactor_label]
 
-        _log_visit_once_per_session(analytics_conn, anonymous_id, reactor_type=reactor_type, page_name='main')
+        if not analytics_opted_out:
+            _log_visit_once_per_session(
+                analytics_conn,
+                anonymous_id,
+                reactor_type=reactor_type,
+                page_name='main',
+            )
 
         # Per-reactor enrichment floor. All three reactors expose a 5%
         # floor; values below the data-validated band (HPMR parametric
@@ -2893,10 +2911,13 @@ with streamlit_analytics.track():
             'https://qualtricsxm69xy9s7vm.qualtrics.com/jfe/form/SV_4Pb0vub9xCcsVV4',
             width='stretch',
         )
-        st.caption(
-            'MOUSE records an anonymous visit identifier for aggregate usage '
-            'analytics. Model inputs and results are not collected.'
-        )
+        if analytics_opted_out:
+            st.caption('Developer analytics opt-out is active for this browser.')
+        else:
+            st.caption(
+                'MOUSE records an anonymous visit identifier for aggregate usage '
+                'analytics. Model inputs and results are not collected.'
+            )
 
         if st.secrets.get("SHOW_ANALYTICS_PANEL", False):
             st.divider()
