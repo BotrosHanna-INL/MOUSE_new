@@ -834,6 +834,8 @@ def _lcoe_at_noak_unit(reactor_type, power_mwt, enrichment, interest_rate, disco
 # ---------------------------------------------------------------------------
 _ANALYTICS_DB_PATH = Path(_repo_root) / 'webapp' / 'analytics.db'
 _ANALYTICS_COOKIE_NAME = 'anonymous_id'
+_POSTHOG_PROJECT_TOKEN = 'phc_r3w3KjhmNbqhzDrCFRVVCnqduaqxPwLksEPd8FPLvUzX'
+_POSTHOG_CAPTURE_URL = 'https://us.i.posthog.com/i/v0/e/'
 
 
 def _get_cookie_manager():
@@ -879,6 +881,47 @@ def _get_first_seen(conn, anonymous_id, now_utc):
     return row[0] if row and row[0] else now_utc
 
 
+def _send_posthog_view(payload):
+    """Send one view without delaying or breaking the Streamlit app."""
+    import urllib.request
+
+    request = urllib.request.Request(
+        _POSTHOG_CAPTURE_URL,
+        data=_json.dumps(payload).encode('utf-8'),
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            response.read(1)
+    except Exception as exc:
+        # Analytics must never interfere with a visitor using MOUSE.
+        print(f'[analytics] PostHog capture failed: {exc}', flush=True)
+
+
+def _capture_posthog_view(anonymous_id, session_id, now_utc):
+    """Queue the sole external analytics event collected by MOUSE."""
+    import threading
+
+    payload = {
+        'api_key': _POSTHOG_PROJECT_TOKEN,
+        'event': 'app_viewed',
+        'distinct_id': anonymous_id,
+        'timestamp': now_utc,
+        'properties': {
+            '$session_id': session_id,
+            '$current_url': 'https://mouse-microreactors.streamlit.app/',
+            'app': 'MOUSE',
+        },
+    }
+    threading.Thread(
+        target=_send_posthog_view,
+        args=(payload,),
+        name='mouse-posthog-capture',
+        daemon=True,
+    ).start()
+
+
 def _log_visit_once_per_session(conn, anonymous_id, reactor_type=None, page_name='main'):
     if 'analytics_session_id' not in st.session_state:
         st.session_state.analytics_session_id = str(uuid.uuid4())
@@ -921,6 +964,11 @@ def _log_visit_once_per_session(conn, anonymous_id, reactor_type=None, page_name
         ),
     )
     conn.commit()
+    _capture_posthog_view(
+        anonymous_id,
+        st.session_state.analytics_session_id,
+        now_utc,
+    )
     st.session_state.analytics_visit_logged = True
 
 
@@ -2844,6 +2892,10 @@ with streamlit_analytics.track():
             '📝 Give Feedback',
             'https://qualtricsxm69xy9s7vm.qualtrics.com/jfe/form/SV_4Pb0vub9xCcsVV4',
             width='stretch',
+        )
+        st.caption(
+            'MOUSE records an anonymous visit identifier for aggregate usage '
+            'analytics. Model inputs and results are not collected.'
         )
 
         if st.secrets.get("SHOW_ANALYTICS_PANEL", False):
