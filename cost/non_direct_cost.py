@@ -57,28 +57,47 @@ def calculate_accounts_31_32_75_82_cost(df, params):
         refueling_period_yr = refueling_period / 365
         params_df = pd.DataFrame(params.items(), columns=['keys', 'values'])
         if params_df.loc[params_df['keys'].str.contains('replacement', case=False), 'keys'].size > 0:
-            A20_replacement_period = refueling_period_yr * np.array([params['A75: Vessel Replacement Period (cycles)'],
-                                                                    params['A75: Core Barrel Replacement Period (cycles)'],
-                                                                     1,
-                                                                     params['A75: Reflector Replacement Period (cycles)'],
-                                                                     params['A75: Drum Replacement Period (cycles)'],
-                                                                     params.get('A75: Integrated HX Replacement Period (cycles)', 0),])
+            A20_replacement_period = np.array([
+                params['A75: Outer Vessel Structure Replacement Period (years)'],
+                refueling_period_yr * params['A75: Inner Vessel Structure Replacement Period (cycles)'],
+                refueling_period_yr,
+                refueling_period_yr * params['A75: Reflector Replacement Period (cycles)'],
+                refueling_period_yr * params['A75: Reactor Control Devices Replacement Period (cycles)'],
+                refueling_period_yr * params.get('A75: Moderator Booster Replacement Period (cycles)', 1),
+            ])
             A20_capital_cost = np.array([df.loc[df['Account'] == 221.12, estimated_cost_col].values.sum(), 
                                          df.loc[df['Account'] == 221.13,  estimated_cost_col].values.sum(), 
                                          df.loc[df['Account'] == 221.33,  estimated_cost_col].values.sum(),
                                          df.loc[df['Account'] == 221.31,  estimated_cost_col].values.sum(),
                                          df.loc[df['Account'] == 221.2,   estimated_cost_col].values.sum(),
-                                         df.loc[df['Account'].isin([222.1, 222.2, 222.3, 222.61]), estimated_cost_col].values.sum()])
+                                         df.loc[df['Account'] == 221.34,  estimated_cost_col].values.sum()])
             annualized_replacement_cost = (A20_capital_cost*_crf(params['Discount Rate'], A20_replacement_period))
-            A20_other_cost = df.loc[df['Account'] == 20, estimated_cost_col].values[0] - A20_capital_cost.sum()
-            annualized_other_cost = A20_other_cost * params['Maintenance to Direct Cost Ratio']
+            maintenance_source_accounts = [
+                [212, 213, 214, 215],
+                [222.1, 222.2, 222.3, 222.6],
+                [223],
+                [221.11, 226, 228],
+                [227],
+                [23],
+                [24],
+                [26],
+            ]
+            maintenance_cost = np.array([
+                df.loc[df['Account'].isin(accounts), estimated_cost_col].sum()
+                for accounts in maintenance_source_accounts
+            ]) * params['Maintenance to Direct Cost Ratio']
             df.loc[df['Account'] == 751, estimated_cost_col] = annualized_replacement_cost[0]
             df.loc[df['Account'] == 752, estimated_cost_col] = annualized_replacement_cost[1]
             df.loc[df['Account'] == 753, estimated_cost_col] = annualized_replacement_cost[2]
             df.loc[df['Account'] == 754, estimated_cost_col] = annualized_replacement_cost[3]
             df.loc[df['Account'] == 755, estimated_cost_col] = annualized_replacement_cost[4]
-            df.loc[df['Account'] == 756, estimated_cost_col] = annualized_replacement_cost[5]
-            df.loc[df['Account'] == 759, estimated_cost_col] = annualized_other_cost
+            df.loc[df['Account'] == 757, estimated_cost_col] = annualized_replacement_cost[5]
+            for account, cost in zip(
+                [759.1, 759.2, 759.3, 759.4, 759.5, 759.6, 759.7, 759.8],
+                maintenance_cost,
+            ):
+                df.loc[df['Account'] == account, estimated_cost_col] = cost
+            df.loc[df['Account'] == 759, estimated_cost_col] = maintenance_cost.sum()
         else:
             df.loc[df['Account'] == 75, estimated_cost_col] = df.loc[df['Account'] == 20, estimated_cost_col].values[0] * params['Maintenance to Direct Cost Ratio']
 

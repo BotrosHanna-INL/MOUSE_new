@@ -1,21 +1,8 @@
 # Copyright 2025, Battelle Energy Alliance, LLC, ALL RIGHTS RESERVED
 
 """
-This script performs a bottom-up cost estimate for a Gas Cooled Microreactor (GCMR)
-WITH Central Facility cost estimation enabled.
-
-This example extends the GCMR Design A example by adding central facility cost estimation.
-A central facility is shared infrastructure (e.g., fuel handling, waste processing, control center)
-that supports multiple reactor units deployed at the same site or region.
-
-Key additions compared to watts_exec_GCMR_Design_A.py:
-  - 'Estimate Central Facility': True  — enables central facility cost calculation
-  - 'Maximum Number of Operating Reactors': 10  — number of reactors the facility supports
-  - 'Central Facility Construction Duration': 24 months  — construction time for the facility
-
-The output Excel file will contain an additional sheet "central facility cost estimate"
-with the breakdown of central facility costs.
-
+This script performs a bottom-up cost estimate for a Gas Cooled Microreactor (GCMR).
+Parallel screening case: E5_enr_15p0.
 OpenMC is used for core design calculations, and other Balance of Plant components are estimated.
 Users can modify parameters in the "params" dictionary below.
 """
@@ -58,7 +45,7 @@ update_params({
     'reactor type': "GCMR",  # LTMR or GCMR
     'TRISO Fueled': "Yes",
     'Fuel': 'UCO',
-    'Enrichment': 0.1975,  # The enrichment is a fraction. It has to be between 0 and 1
+    'Enrichment': 0.15,  # The enrichment is a fraction. It has to be between 0 and 1
     'UO2 atom fraction': 0.7,  # Mixing UO2 and UC by atom fraction
     'Radial Reflector': 'Graphite',
     'Axial Reflector': 'Graphite',
@@ -67,8 +54,13 @@ update_params({
     'Moderator Booster Materials': ['ZrH'],
     'Coolant': 'Helium',
     'Common Temperature': 850,  # Kelvins
+    # IG-110 proxy: mean of axial/transverse CTE values in
+    # ORNL/TM-2017/705, Table 2.2 (4.5 and 4.2 microstrain/K).
+    'Graphite Linear Expansion Coefficient': 4.3e-6,  # 1/K
     'Control Drum Absorber': 'B4C_enriched',  # The absorber material in the control drums
     'Control Drum Reflector': 'Graphite',  # The reflector material in the control drums
+    'Shutdown Rod Absorber': 'B4C_enriched',
+    'Shutdown Rod Cladding': 'SS304',
     'HX Material': 'SS316', 
 })
 
@@ -81,30 +73,52 @@ update_params({
     'Fuel Pin Materials': ['UCO', 'buffer_graphite', 'PyC', 'SiC', 'PyC'],
     'Fuel Pin Radii': [0.0250, 0.0350, 0.0390, 0.0425, 0.0465],  # cm # https://art.inl.gov/NRC%20Training%202019/04_TRISO_Fuel.pdf
     'Compact Fuel Radius': 0.6225,  # cm # The radius of the area that is occupied by the TRISO particles (fuel compact/ fuel element)
-    'Packing Fraction': 0.3,
+    'Packing Fraction': 0.4,
+    'TRISO Packing Seed': 1,
     
     # Coolant channel and booster dimensions
     'Coolant Channel Radius': 0.35,  # cm
-    'Moderator Booster Radii': [0.55],  # cm
+    'Moderator Booster Radii': [0.5],  # cm
     'Lattice Pitch': 2.25,
     'Assembly Rings': 6,
     'Core Rings': 5,
+
+    # Central assembly
+    'Central Shutdown Rod Radius': 0.85,  # cm
+    'Central Shutdown Rod Clad Radius': 1.05,  # cm; 0.20 cm SS304
+    'Central Shutdown Rod Ring': 2,
+    'Central Shutdown Rod Count': 12,
+
+    # Six assemblies surrounding the center
+    'Surrounding Shutdown Rod Radius': 0.45,  # cm
+    'Surrounding Shutdown Rod Clad Radius': 0.65,  # cm; 0.20 cm SS304
+    'Surrounding Shutdown Rod Ring': 2,
+    'Surrounding Shutdown Rod Count': 2,
+    'Surrounding Shutdown Assembly Count': 6,
+
+    # Explicit geometry values for this design. The geometry helper validates
+    # these values and does not replace them with calculated dimensions.
+    'Assembly FTF': 19.48557158514987,  # cm
+    'Active Height': 200.0,  # cm
+    'Radial Reflector Thickness': 9.742785792574935,  # cm
+    'Axial Reflector Thickness': 9.742785792574935,  # cm
+    'Core Radius': 107.17064371832429,  # cm
+    'Shutdown Rod Height': 200.0,  # cm
 })
-params['Assembly FTF'] = params['Lattice Pitch']*(params['Assembly Rings']-1)*np.sqrt(3)
-params['Radial Reflector Thickness'] = 27.393 # cm # radial reflector
-params['Axial Reflector Thickness'] = params['Radial Reflector Thickness'] # cm
-params['Core Radius'] = params['Assembly FTF']*params['Core Rings'] +  params['Radial Reflector Thickness']
-params['Active Height'] = 250
 
 # **************************************************************************************************************************
 #                                           Sec. 3: Control Drums
 # ************************************************************************************************************************** 
 update_params({
-    'Drum Radius': 9, # cm   
+    'Drum Count': 24,
+    'Drum Radius': 9.530986101432001,  # cm
+    'Drum Tube Radius': 9.742785792574935,  # cm
     'Drum Absorber Thickness': 1, # cm
-    'Drum Height': params['Active Height'] + 2*params['Axial Reflector Thickness'],
+    'Drum Absorber Arc Degrees': 120.0,
+    'Drum Height': 219.48557158514987,  # cm
     })
 calculate_drums_volumes_and_masses(params)
+calculate_gcmr_shutdown_rods_volumes_and_masses(params)
 calculate_reflector_mass_GCMR(params)          
 calculate_moderator_mass_GCMR(params) 
 
@@ -125,7 +139,7 @@ params['Heat Flux'] = calculate_heat_flux_TRISO(params) # MW/m^2
 # **************************************************************************************************************************
 #                                           Sec. 5: Running OpenMC
 # **************************************************************************************************************************
-params['Particles'] = 2000
+
 # --- Shutdown Margin (SDM) ---
 # When True, an additional OpenMC simulation is run with all control drums rotated
 # to the fully inserted (ARI - All Rods In) position. The SDM is then calculated
@@ -133,7 +147,8 @@ params['Particles'] = 2000
 # A positive SDM means the reactor can be safely shut down with all drums inserted.
 # Recommended: True for final design verification; can be set to False to save
 # computation time during early design exploration.
-params['Shutdown Margin Calc'] = False  # True or False
+params['Shutdown Margin Calc'] = True  # True or False
+params['Cold Shutdown Temperature'] = 300  # K
 
 # --- Isothermal Temperature Coefficient ---
 # When True, two additional OpenMC simulations are run: one at 'Common Temperature'
@@ -156,6 +171,13 @@ params['Temperature Perturbation'] = 100  # K
 heat_flux_monitor = monitor_heat_flux(params)
 run_openmc(build_openmc_model_GCMR, heat_flux_monitor, params)
 fuel_calculations(params)  # calculate the fuel mass and SWU
+
+# --- Previously calculated OpenMC results ---
+# To bypass OpenMC later, comment out run_openmc(...) above and uncomment these assignments.
+# params['Fuel Lifetime'] = 1786  # days
+# params['Mass U235'] = 85655.7587486539  # g
+# params['Mass U238'] = 484226.2801659319  # g
+# params['Uranium Mass'] = 569.8820389145857  # kg
 
 # **************************************************************************************************************************
 #                                         Sec. 6: Primary Loop + Balance of Plant
@@ -312,250 +334,6 @@ update_params({
     'NOAK Unit Number': 100,
 })
 
-# **************************************************************************************************************************
-#                                           Sec. 11: Central Facility Costing
-# **************************************************************************************************************************
-# A central facility is shared infrastructure that supports multiple reactor units
-# deployed at the same site or region. This includes:
-#   - Servicing Facility: reactor refueling, defueling, and maintenance hot cells
-#   - Manufacturing/Factory Facility: reactor component fabrication
-#   - New Reactor Facility: fresh fuel storage, reactor fueling, and testing
-#   - Radioactive Waste Management Facility: waste processing and storage
-#   - Transportation infrastructure: vehicles and casks for reactor/fuel transport
-#
-# When 'Estimate Central Facility' is True, the cost estimation reads from the
-# "Central Facility Database" sheet in Cost_Database.xlsx and produces a separate
-# cost breakdown sheet in the output Excel file.
-#
-# All capacity/rate parameters for facilities and operations are assumed to be YEARLY
-# unless otherwise specified.
-
-# --- Overall Central Facility Parameters ---
-update_params({
-    'Estimate Central Facility': True,  # Enable central facility cost estimation
-
-    # Maximum number of reactor units the central facility is designed to support.
-    # Used to calculate fleet-wide metrics and normalize costs per kW.
-    'Maximum Number of Operating Reactors': 100,  # total number of reactors served by all facilities
-
-    # Construction duration for the central facility (may differ from reactor construction).
-    # Used for calculating financing costs (interest during construction).
-    'Central Facility Construction Duration': 120,  # months (this includes manufacturing facility and the service facility)
-
-    # Total electrical capacity of the central facility itself (for its own operations).
-    'Central Facility Power MWe': 50,  # MWe
-
-    # Perimeter of the entire central facility site (for security fencing, etc.).
-    'Site Perimeter': 20000,  # meters
-
-    # Number of maintenance staff per shift at the central facility.
-    'Maintenance Staff Per Shift': 40,  # FTEs per shift
-})
-
-# Derived parameter: total thermal power of the operating reactor fleet
-params['Power Mwt of Operating Fleet'] = params['Power MWt'] * params['Maximum Number of Operating Reactors']
-
-# --- Servicing Facility Parameters ---
-# The servicing facility handles reactor refueling, defueling, inspection, and maintenance.
-# It includes hot cells for handling irradiated components.
-update_params({
-    # Building volumes for servicing facility structures (concrete volumes in m^3)
-    'Servicing Building Roof Volume': 500,  # m^3
-    'Servicing Building Basement Volume': 500,  # m^3
-    'Servicing Building Walls Volume': 300,  # m^3
-    'Servicing Building Volume': 5000,  # m^3 (total enclosed volume)
-
-    'Helium Purification and Storage Building Roof Volume': 100,  # m^3
-    'Helium Purification and Storage Building Basement Volume': 100,  # m^3
-    'Helium Purification and Storage Building Walls Volume': 80,  # m^3
-    'Helium Purification and Storage Building Volume': 1000,  # m^3
-
-    'Servicing Facility Integrated Control Room Roof Volume': 50,  # m^3 — mainly the hot cell
-    'Servicing Facility Integrated Control Room Basement Volume': 50,  # m^3
-    'Servicing Facility Integrated Control Room Walls Volume': 40,  # m^3
-    'Servicing Facility Integrated Control Room Volume': 500,  # m^3
-
-    'Servicing Facility Admin Building Roof Volume': 80,  # m^3
-    'Servicing Facility Admin Building Basement Volume': 80,  # m^3
-    'Servicing Facility Admin Building Walls Volume': 60,  # m^3
-    'Servicing Facility Admin Building Volume': 800,  # m^3
-
-    'Servicing Facility Security Building Roof Volume': 30,  # m^3
-    'Servicing Facility Security Building Basement Volume': 30,  # m^3
-    'Servicing Facility Security Building Walls Volume': 25,  # m^3
-    'Servicing Facility Security Building Volume': 300,  # m^3
-
-    # Perimeter of the servicing facility (for security fencing)
-    'Servicing Facility Perimeter': 2000,  # meters
-
-    # Number of reactors serviced per year
-    'Total Servicing Rate': 50,  # reactors/year
-
-    # Number of hot cells for reactor servicing operations
-    'Servicing Hot Cell Count': 10,  # number of hot cells ('Total Servicing Rate' divided by hot cell capacity)
-
-    # Volume of each servicing hot cell
-    'Servicing Hot Cell Volume': 500,  # m^3 per hot cell (empty interior volume)
-
-    # Number of defueling/refueling lines (typically equals hot cell count)
-    'Defueling/Refueling Line Count': 10,  # number of lines
-})
-
-# Total volume of all servicing hot cells combined
-params['Total Servicing Hot Cell Volume'] = params['Servicing Hot Cell Count'] * params['Servicing Hot Cell Volume']
-# Thermal power processed by servicing facility (assumes 5% power for low-power testing per hot cell)
-params['Power Mwt Processed by Servicing'] = 0.05 * params['Power MWt'] * params['Servicing Hot Cell Count']
-
-# --- Manufacturing/Factory Facility Parameters ---
-# The manufacturing facility fabricates reactor components and assembles new reactors.
-update_params({
-    # Building volumes for manufacturing facility structures
-    'Fabrication Building Roof Volume': 400,  # m^3
-    'Fabrication Building Basement Volume': 400,  # m^3
-    'Fabrication Building Walls Volume': 300,  # m^3
-    'Fabrication Building Volume': 4000,  # m^3
-
-    'Feed and Product Warehouse Building Roof Volume': 200,  # m^3
-    'Feed and Product Warehouse Building Basement Volume': 200,  # m^3
-    'Feed and Product Warehouse Building Walls Volume': 150,  # m^3
-    'Feed and Product Warehouse Building Volume': 2000,  # m^3
-
-    'Manufacturing Facility Integrated Control Building Roof Volume': 50,  # m^3
-    'Manufacturing Facility Integrated Control Building Basement Volume': 50,  # m^3
-    'Manufacturing Facility Integrated Control Building Walls Volume': 40,  # m^3
-    'Manufacturing Facility Integrated Control Building Volume': 500,  # m^3
-
-    'Manufacturing Facility Admin Building Roof Volume': 80,  # m^3
-    'Manufacturing Facility Admin Building Basement Volume': 80,  # m^3
-    'Manufacturing Facility Admin Building Walls Volume': 60,  # m^3
-    'Manufacturing Facility Admin Building Volume': 800,  # m^3
-
-    'Manufacturing Facility Security Building Roof Volume': 30,  # m^3
-    'Manufacturing Facility Security Building Basement Volume': 30,  # m^3
-    'Manufacturing Facility Security Building Walls Volume': 25,  # m^3
-    'Manufacturing Facility Security Building Volume': 300,  # m^3
-
-    # Perimeter of the manufacturing/factory facility
-    'Factory Perimeter': 3000,  # meters
-
-    # Number of new reactors produced per year
-    'New Reactor Production Rate': 20,  # reactors/year
-})
-
-# --- New Reactor Facility Parameters ---
-# The new reactor facility handles fresh fuel storage, initial fueling, and reactor testing
-# before deployment to field sites. # these are fresh reactors while the other servicing facility is for the used ones
-update_params({
-    # Building volumes for new reactor facility structures
-    'Fresh Fuel Storage and Inspection Building Roof Volume': 150,  # m^3
-    'Fresh Fuel Storage and Inspection Building Basement Volume': 150,  # m^3
-    'Fresh Fuel Storage and Inspection Building Walls Volume': 120,  # m^3
-    'Fresh Fuel Storage and Inspection Building Volume': 1500,  # m^3
-
-    'Reactor Fueling Building Roof Volume': 200,  # m^3
-    'Reactor Fueling Building Basement Volume': 200,  # m^3
-    'Reactor Fueling Building Walls Volume': 150,  # m^3
-    'Reactor Fueling Building Volume': 2000,  # m^3
-
-    'Reactor Testing Building Roof Volume': 300,  # m^3
-    'Reactor Testing Building Basement Volume': 300,  # m^3
-    'Reactor Testing Building Walls Volume': 250,  # m^3
-    'Reactor Testing Building Volume': 3000,  # m^3
-
-    'New Reactor Fuel and Testing Facility Admin Building Roof Volume': 80,  # m^3
-    'New Reactor Fuel and Testing Facility Admin Building Basement Volume': 80,  # m^3
-    'New Reactor Fuel and Testing Facility Admin Building Walls Volume': 60,  # m^3
-    'New Reactor Fuel and Testing Facility Admin Building Volume': 800,  # m^3
-
-    'New Reactor Fuel and Testing Facility Security Building Roof Volume': 30,  # m^3
-    'New Reactor Fuel and Testing Facility Security Building Basement Volume': 30,  # m^3
-    'New Reactor Fuel and Testing Facility Security Building Walls Volume': 25,  # m^3
-    'New Reactor Fuel and Testing Facility Security Building Volume': 300,  # m^3
-
-    # Perimeter of the new reactor facility
-    'New Reactor Facility Perimeter': 2500,  # meters
-
-    # Number of fueling lines for new reactors
-    'New Reactor Fueling Line Count': 5,  # number of lines
-
-    # Number of testing lines/hot cells for new reactors
-    'New Reactor Testing Line Count': 10,  # number of lines
-
-    # Hot cell specifications for reactor testing
-    'New Reactor Testing Hot Cell Count': 10,  # number of hot cells
-    'New Reactor Testing Hot Cell Volume': 500,  # m^3 per hot cell
-})
-
-# Total volume of all new reactor testing hot cells
-params['New Reactor Testing Hot Cell Volume'] = params['New Reactor Testing Hot Cell Count'] * params['New Reactor Testing Hot Cell Volume']
-
-# Total electrical capacity processed by new reactor facility (production rate × reactor power)
-params['Power Mwe Processed by New Reactor Facility'] = params['Power MWe'] * params['New Reactor Production Rate']
-
-# --- Radioactive Waste Management Facility Parameters ---
-# The radioactive waste management facility handles processing and storage of
-# radioactive waste from reactor operations and servicing.
-update_params({
-    # Building volumes for waste management facility structures
-    'Radioactive Waste Processing Building Roof Volume': 200,  # m^3
-    'Radioactive Waste Processing Building Basement Volume': 200,  # m^3
-    'Radioactive Waste Processing Building Walls Volume': 150,  # m^3
-    'Radioactive Waste Processing Building Volume': 2000,  # m^3
-
-    'Radioactive Waste Storage Building Roof Volume': 300,  # m^3
-    'Radioactive Waste Storage Building Basement Volume': 300,  # m^3
-    'Radioactive Waste Storage Building Walls Volume': 250,  # m^3
-    'Radioactive Waste Storage Building Volume': 3000,  # m^3
-
-    'Radioactive Waste Management Facility Integrated Control Room Roof Volume': 50,  # m^3
-    'Radioactive Waste Management Facility Integrated Control Room Basement Volume': 50,  # m^3
-    'Radioactive Waste Management Facility Integrated Control Room Walls Volume': 40,  # m^3
-    'Radioactive Waste Management Facility Integrated Control Room Volume': 500,  # m^3
-
-    'Radioactive Waste Management Facility Admin Building Roof Volume': 80,  # m^3
-    'Radioactive Waste Management Facility Admin Building Basement Volume': 80,  # m^3
-    'Radioactive Waste Management Facility Admin Building Walls Volume': 60,  # m^3
-    'Radioactive Waste Management Facility Admin Building Volume': 800,  # m^3
-
-    'Radioactive Waste Management Facility Security Building Roof Volume': 30,  # m^3
-    'Radioactive Waste Management Facility Security Building Basement Volume': 30,  # m^3
-    'Radioactive Waste Management Facility Security Building Walls Volume': 25,  # m^3
-    'Radioactive Waste Management Facility Security Building Volume': 300,  # m^3
-
-    # Perimeter of the radioactive waste management facility
-    'Radioactive Waste Management Facility Perimeter': 2000,  # meters
-})
-
-# --- Transportation Parameters --- 
-# Vehicles and equipment for transporting reactors, fuel, and waste between facilities.
-update_params({
-    # Local transport vehicles (within the central facility complex)
-    'Local Transport Vehicle Count': 80,  # number of vehicles inside the facility
-
-    # Vehicles for transporting complete reactor units to/from field sites
-    'Reactor Transport Vehicle Count': 20,  # number of vehicles
-
-    # Vehicles for transporting spare parts and radioactive waste
-    'Spares/Waste Transport Vehicle Count': 50,  # number of vehicles
-
-    # General purpose transport vehicles
-    'General Transport Vehicle Count': 100,  # number of vehicles
-})
-
-# --- Cask Parameters ---
-# Specialized containers for transporting spent fuel, reactors, and radioactive waste inside facility
-# These are consumable items that need periodic replacement.
-update_params({
-    # Annual replacement rate for spent fuel transport casks
-    'Annual Spent Fuel Cask Replacement': 20,  # casks/year — 20 casks are used and disposed of annually for spent fuel transport
-
-    # Annual replacement rate for reactor transport casks
-    'Annual Reactor Cask Replacement': 10,  # casks/year
-
-    # Annual replacement rate for radioactive waste transport casks
-    'Annual Rad Waste Cask Replacement': 50,  # casks/year
-})
-
 # --- PTC (Production Tax Credit) ---
 # The PTC is a per-MWh credit earned for every MWh of electricity produced and sold
 # during the credit period. Under the IRA (Section 45Y), advanced nuclear facilities
@@ -567,14 +345,14 @@ update_params({
 #   - $15/MWh if prevailing wage + apprenticeship requirements ARE met (5x multiplier)
 # Assumed here: $15/MWh (prevailing wage requirements met)
 # Units: $/MWh
-params['PTC credit value'] = 15.0  # $/MWh
+# params['PTC credit value'] = 15.0  # $/MWh
 
 # Duration of the PTC credit period.
 # Under the IRA Section 45Y, the credit is available for 10 years after the facility
 # is placed in service.
 # Units: years
 # Typical value: 10 years
-params['PTC credit period'] = 10  # years
+# params['PTC credit period'] = 10  # years
 
 # --- PTC Bonus Multipliers (optional, stackable) ---
 # Under the IRA, additional bonus credits can be stacked on top of the base PTC
@@ -587,8 +365,8 @@ params['PTC credit period'] = 10  # years
 #   (areas affected by coal plant closures or fossil fuel employment decline)
 #   Typical value: 0.10 (10%)
 # To disable bonuses, set both to 0.0 or remove them entirely.
-params['domestic_content_bonus'] = 0.10   # fraction — assumes domestic content standard is met
-params['energy_community_bonus'] = 0.10   # fraction — assumes facility is in an energy community
+# params['domestic_content_bonus'] = 0.10   # fraction — assumes domestic content standard is met
+# params['energy_community_bonus'] = 0.10   # fraction — assumes facility is in an energy community
 
 # --- Corporate Tax Rate ---
 # The US federal corporate tax rate used to gross up the PTC tax credit to its
@@ -598,14 +376,23 @@ params['energy_community_bonus'] = 0.10   # fraction — assumes facility is in 
 # Municipal utilities and non-profit cooperatives may use 0.0 (tax-exempt).
 # Units: fraction (e.g. 0.21 for 21%)
 # Typical values: 0.21 (federal only), 0.27 (federal + average state)
-params['Tax Rate'] = 0.21  # fraction
+# params['Tax Rate'] = 0.21  # fraction
+
+# --- IRA Sunset: Number of Units Claiming ITC/PTC ---
+# Caps how many units in the deployment sequence may avail the credit. A unit
+# is eligible only if its position is <= this cutoff. FOAK = unit 1; the NOAK
+# column = unit 'NOAK Unit Number'. When a unit is past the cutoff, the
+# ITC/PTC-adjusted outputs fall back to the un-subsidized values, producing
+# a step in the LCOE-vs-deployment-scale curve at the sunset point.
+# Only applies when ITC or PTC is enabled above. Defaults to effectively
+# infinite when omitted (every unit claims the credit).
+# params['Number of Units Claiming ITC/PTC'] = 10
 
 # **************************************************************************************************************************
-#                                           Sec. 12: Post Processing
+#                                           Sec. 11: Post Processing
 # **************************************************************************************************************************
 params['Number of Samples'] = 100  # number of samples for cost uncertainty analysis
 # Estimate costs using the cost database file and save the output to an Excel file
-# Note: Output will include both reactor costs and central facility costs (separate sheets).
 estimate = detailed_bottom_up_cost_estimate('cost/Cost_Database.xlsx')
 elapsed_time = (time.time() - time_start) / 60  # calculate execution time
 print('Execution time:', np.round(elapsed_time, 1), 'minutes')
