@@ -34,7 +34,7 @@ def update_params(updates):
 update_params({
     'plotting': "Y",  # "Y" or "N": Yes or No
     'cross_sections_xml_location': '/projects/MRP_MOUSE/openmc_data/endfb-viii.0-hdf5/cross_sections.xml', # on INL HPC
-    'simplified_chain_thermal_xml': '/projects/MRP_MOUSE/openmc_data/simplified_thermal_chain11.xml'       # on INL HPC
+    'simplified_chain_thermal_xml': '/projects/MRP_MOUSE/openmc_data/chain_endf_b8.0.xml'       # on INL HPC
 })
 
 # **************************************************************************************************************************
@@ -45,12 +45,13 @@ update_params({
     'reactor type': "HPMR",
     'TRISO Fueled': "Yes",
     'Fuel': 'homog_TRISO',     
-    'Enrichment': 0.19985,
+    'Enrichment': 0.1975,
+    'Packing Fraction': 0.17,
     'Radial Reflector': 'Graphite',
     'Axial Reflector': 'Graphite',
     'Moderator': 'monolith_graphite',
     'Coolant': 'Helium',
-    'Control Drum Absorber': 'B4C_natural',
+    'Control Drum Absorber': 'B4C_enriched',
     'Control Drum Reflector': 'Graphite',
     'Cooling Device': 'heatpipe',
     'Common Temperature': 1000,  #K
@@ -63,22 +64,24 @@ update_params({
 
 update_params({
     'Fuel Pin Materials': ['homog_TRISO', 'Helium'],
-    'Fuel Pin Radii': [1.00, 1.05], #cm
+    'Fuel Pin Radii': [1.15, 1.20], # cm; fuel region radius, then outer gap radius
     'Heat Pipe Materials': ['heatpipe', 'Helium'],
     'Heat Pipe Radii': [1.10, 1.15],
     'Number of Rings per Assembly': 6,
-    'Number of Rings per Core': 3,
-    'Lattice Pitch': 3.4,
+    'Number of Rings per Core': 5,
+    'Lattice Pitch': 3.2,
+    # HP19: 19 heat pipes and 72 fuel pins per assembly.
+    # HP13: 13 heat pipes and 78 fuel pins per assembly. Choosing HP13 adds
+    # fuel positions but raises the average thermal duty per heat pipe.
+    'HPMR Heat Pipe Layout': 'HP19',
 })
 params['Assembly FTF'] = (params['Lattice Pitch'] * (params['Number of Rings per Assembly'] - 1) + 1.4 * params['Fuel Pin Radii'][-1]) * np.sqrt(3)
 params['hexagonal Core Edge Length'] = (params['Assembly FTF'] * (params['Number of Rings per Core']-1)) + (params['Assembly FTF']/2) + 6.6
-params['Radial Reflector Thickness'] = 50 #cm
+params['Radial Reflector Thickness'] = 78 #cm
 params['Core Radius'] = 0.5*np.sqrt(3)*params['hexagonal Core Edge Length'] + params['Radial Reflector Thickness']
-params['Active Height'] = 2 * params['Core Radius'] #cm  
+params['Active Height'] = 262.617 # cm
 params['Axial Reflector Thickness'] = params['Radial Reflector Thickness']
-params['Fuel Pin Count per Assembly'] = calculate_number_fuel_elements_hpmr(params['Number of Rings per Assembly'])
 params['Fuel Assemblies Count'] = (3 * params['Number of Rings per Core']**2) - (3 * params['Number of Rings per Core'])
-params['Fuel Pin Count'] = params['Fuel Assemblies Count'] * params['Fuel Pin Count per Assembly']
 number_of_heatpipes_hmpr(params)
 
 # **************************************************************************************************************************
@@ -86,26 +89,48 @@ number_of_heatpipes_hmpr(params)
 # ************************************************************************************************************************** 
 
 update_params({
-    'Drum Count': 12,   # allowed: 6, 12, 18, 24
-    'Drum Radius': 0.4 * params['Radial Reflector Thickness'], 
+    'Drum Count': 24,   # allowed: 6, 12, 18, 24
+    'Drum Radius': 17 ,
     'Drum Absorber Thickness': 1,  # cm
+    'Drum Absorber Arc Degrees': 120.0,  # degrees; must be greater than 0 and less than 180
     'Drum Height': params['Active Height']
 })
 
+# HPMR supports only 0 (no central rod) or 1 (one central rod). The following
+# absorber, cladding, and radius inputs are needed only when this is 1.
+update_params({
+    'Number of Shutdown Rods': 1,
+    'Shutdown Rod Absorber': 'B4C_enriched',
+    'Shutdown Rod Cladding': 'SS304',
+    'Shutdown Rod Absorber Radius': 10.0,  # cm
+    'Shutdown Rod Clad Radius': 10.2,  # cm
+    # User-controlled physical rod height. It directly sets absorber and
+    # cladding inventory/cost; the default spans the active fuel height.
+    'Shutdown Rod Height': params['Active Height'],  # cm
+})
+
 calculate_drums_volumes_and_masses(params)
+calculate_shutdown_rods_volumes_and_masses(params)
 calculate_reflector_and_moderator_mass_HPMR(params)
 
 # **************************************************************************************************************************
 #                                           Sec. 4: Overall System
 # ************************************************************************************************************************** 
 update_params({
-    'Power MWt': 7, 
+    'Power MWt': 15,
     'Thermal Efficiency': 0.36,
     'Heat Flux Criteria': 0.9,  # MW/m^2 
-    'Time Steps': [t * 86400 for t in [0.01, 0.99, 3, 6, 20, 70, 100, 165, 365, 365, 365, 365, 365, 365, 365.00]]  # seconds
+'Burnup Steps': [
+    0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0,
+    20.0, 30.0, 40.0, 50.0, 60.0, 80.0,
+    100.0, 120.0, 150.0
+]
 })
 params['Power MWe'] = params['Power MWt'] * params['Thermal Efficiency']
 params['Heat Flux'] = calculate_heat_flux(params)
+# Calculated diagnostic, not a design constraint. Published heat-pipe concepts
+# span roughly 3--20+ kW/pipe; apply a qualified design-specific limit separately.
+calculate_average_heat_pipe_loading(params)
 
 # **************************************************************************************************************************
 #                                           Sec. 5: Running OpenMC
@@ -118,7 +143,11 @@ params['Heat Flux'] = calculate_heat_flux(params)
 # A positive SDM means the reactor can be safely shut down with all drums inserted.
 # Recommended: True for final design verification; can be set to False to save
 # computation time during early design exploration.
-params['Shutdown Margin Calc'] = False  # True or False
+params['Shutdown Margin Calc'] = True  # True or False
+
+# Used only by temperature-coefficient snapshots to apply a density-only
+# graphite thermal-expansion correction; geometry remains fixed.
+params['Graphite Linear Expansion Coefficient'] = 4.3e-6  # 1/K
 
 # --- Isothermal Temperature Coefficient ---
 # When True, two additional OpenMC simulations are run: one at 'Common Temperature'
@@ -126,7 +155,7 @@ params['Shutdown Margin Calc'] = False  # True or False
 # coefficient is then calculated in units of pcm/K.
 # A negative coefficient indicates the reactor is self-stabilizing (desired behavior).
 # Recommended: True for safety analysis; can be set to False to save computation time.
-# params['Isothermal Temperature Coefficients'] = True  # True or False
+params['Isothermal Temperature Coefficients'] = True  # True or False
 
 # --- Temperature Perturbation ---
 # The temperature step (in Kelvin) used for the isothermal temperature coefficient calculation.
@@ -136,7 +165,7 @@ params['Shutdown Margin Calc'] = False  # True or False
 # avoiding nonlinear effects. 
 # Units: Kelvin
 # This parameter is REQUIRED only when 'Isothermal Temperature Coefficients' is True.
-# params['Temperature Perturbation'] = 100  # K
+params['Temperature Perturbation'] = 100  # K
 
 heat_flux_monitor = monitor_heat_flux(params)
 run_openmc(build_openmc_model_HPMR, heat_flux_monitor, params)
@@ -148,7 +177,7 @@ fuel_calculations(params)  # calculate the fuel mass and SWU
 params.update({
     'Primary Loop Purification': True,
     'Secondary HX Mass': 0,
-    'Primary Loop Count': 2,
+    'Primary Loop Count': 1,
     'Primary Loop Inlet Temperature': 650 + 273.15, # K
     'Primary Loop Outlet Temperature': 650 + 273.15, # K
     'Secondary Loop Inlet Temperature': 300 + 273.15, # K
@@ -225,10 +254,11 @@ params['Replacement Coolant Inventory'] = 0
 total_refueling_period = params['Fuel Lifetime'] + params['Refueling Period'] + params['Startup Duration after Refueling'] # days
 total_refueling_period_yr = total_refueling_period/365
 params['A75: Outer Vessel Structure Replacement Period (years)'] = 20
-params['A75: Inner Vessel Structure Replacement Period (cycles)'] = np.floor(10/total_refueling_period_yr)
-params['A75: Reflector Replacement Period (cycles)']     = np.floor(10/total_refueling_period_yr)
-params['A75: Reactor Control Devices Replacement Period (cycles)'] = np.floor(10/total_refueling_period_yr)
+params['A75: Inner Vessel Structure Replacement Period (years)'] = 10
+params['A75: Reflector Replacement Period (years)'] = 10
+params['A75: Reactor Control Devices Replacement Period (years)'] = 10
 params['A75: Moderator Booster Replacement Period (cycles)'] = 1
+params['A75: Moderator Replacement Period (cycles)'] = 1
 params['Maintenance to Direct Cost Ratio']                = 0.015
 params['A78: CAPEX to Decommissioning Cost Ratio'] = 0.15
 
@@ -293,7 +323,7 @@ update_params({
 # **************************************************************************************************************************
 #                                           Sec. 11: Post Processing
 # **************************************************************************************************************************
-params['Number of Samples'] = 1  # number of samples for cost uncertainty analysis
+params['Number of Samples'] = 100  # number of samples for cost uncertainty analysis
 # Estimate costs using the cost database file and save the output to an Excel file
 estimate = detailed_bottom_up_cost_estimate('cost/Cost_Database.xlsx')
 elapsed_time = (time.time() - time_start) / 60  # calculate execution time
